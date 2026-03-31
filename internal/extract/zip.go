@@ -89,6 +89,53 @@ func ReadFromZip(zipData []byte, pattern string) ([]ZipEntry, error) {
 	return entries, nil
 }
 
+// ReadFromZipFunc reads files from a ZIP archive using a custom match function.
+// Returns entries sorted by name.
+func ReadFromZipFunc(zipData []byte, match func(name string) bool) ([]ZipEntry, error) {
+	r, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zip: %w", err)
+	}
+
+	if len(r.File) > MaxEntryCount {
+		return nil, fmt.Errorf("too many entries in zip: %d > %d", len(r.File), MaxEntryCount)
+	}
+
+	var entries []ZipEntry
+	var totalSize uint64
+	for _, f := range r.File {
+		if f.FileInfo().IsDir() || !match(f.Name) {
+			continue
+		}
+
+		if f.UncompressedSize64 > uint64(MaxEntrySize) {
+			return nil, fmt.Errorf("entry %q exceeds per-entry size limit", f.Name)
+		}
+		totalSize += f.UncompressedSize64
+		if totalSize > uint64(MaxUncompressedSize) {
+			return nil, fmt.Errorf("total uncompressed size exceeds limit")
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return nil, fmt.Errorf("failed to open entry %q: %w", f.Name, err)
+		}
+		data, err := io.ReadAll(io.LimitReader(rc, int64(MaxEntrySize)+1))
+		_ = rc.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read entry %q: %w", f.Name, err)
+		}
+
+		entries = append(entries, ZipEntry{Name: f.Name, Data: data})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name < entries[j].Name
+	})
+
+	return entries, nil
+}
+
 // SafeExtract extracts all files from a ZIP archive to the target directory.
 // It rejects zip-slip path traversal, oversized entries, and excessive entry counts.
 func SafeExtract(zipData []byte, targetDir string) ([]ExtractedFile, error) {

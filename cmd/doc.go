@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -90,6 +91,9 @@ var docGetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		docID := args[0]
+		if !isValidDocID(docID) {
+			return &api.EDINETError{Code: api.ErrValidation, Message: fmt.Sprintf("invalid docID %q: must match S followed by digits (e.g. S100ABCD)", docID)}
+		}
 
 		apiType, ok := downloadTypeMap[docGetType]
 		if !ok || docGetType == "" {
@@ -260,6 +264,13 @@ func validateDocListFlags() error {
 
 // jst is the Asia/Tokyo timezone used for EDINET date validation.
 var jst = time.FixedZone("JST", 9*60*60)
+
+var docIDPattern = regexp.MustCompile(`^S\w+$`)
+
+// isValidDocID checks that the docID contains no path separators or traversal characters.
+func isValidDocID(id string) bool {
+	return docIDPattern.MatchString(id)
+}
 
 func validateDate(d string) error {
 	t, err := time.ParseInLocation("2006-01-02", d, jst)

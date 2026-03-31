@@ -190,20 +190,20 @@ func isBlockElement(tag string) bool {
 	return false
 }
 
-// readHTMLEntries tries multiple known paths for EDINET HTML files.
-// Real EDINET type=1 ZIPs may have HTML under PublicDoc/ or XBRL/PublicDoc/.
+// readHTMLEntries finds HTML files under PublicDoc/ at any nesting depth.
+// EDINET type=1 ZIPs may place HTML under PublicDoc/, XBRL/PublicDoc/, or deeper paths.
 func readHTMLEntries(zipData []byte) ([]ZipEntry, error) {
-	paths := []string{"PublicDoc/*.htm", "XBRL/PublicDoc/*.htm"}
-	for _, p := range paths {
-		entries, err := ReadFromZip(zipData, p)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read HTML from ZIP: %w", err)
-		}
-		if len(entries) > 0 {
-			return entries, nil
-		}
+	entries, err := ReadFromZipFunc(zipData, func(name string) bool {
+		return (strings.Contains(name, "PublicDoc/") || strings.Contains(name, "PublicDoc\\")) &&
+			(strings.HasSuffix(name, ".htm") || strings.HasSuffix(name, ".html"))
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to read HTML from ZIP: %w", err)
 	}
-	return nil, fmt.Errorf("no .htm files found in archive (tried PublicDoc/ and XBRL/PublicDoc/)")
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("no .htm files found in archive under PublicDoc/")
+	}
+	return entries, nil
 }
 
 func normalizeWhitespace(s string) string {
