@@ -102,7 +102,11 @@ func (s *DocumentService) listDateRange(ctx context.Context, opts ListOptions) (
 
 		// Skip rate-limit delay when result came from cache (no API call made)
 		if i < len(dates)-1 && !fromCache {
-			time.Sleep(rateLimit)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(rateLimit):
+			}
 		}
 	}
 

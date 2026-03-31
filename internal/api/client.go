@@ -68,9 +68,9 @@ func (c *Client) doRequest(ctx context.Context, path string, params url.Values) 
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", &EDINETError{
-			Code:    ErrInternal,
+			Code:    httpStatusToErrorCode(resp.StatusCode),
 			Status:  resp.StatusCode,
-			Message: fmt.Sprintf("unexpected HTTP status: %d", resp.StatusCode),
+			Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode)),
 			Raw:     string(body),
 		}
 	}
@@ -94,6 +94,23 @@ func (c *Client) GetWithParams(ctx context.Context, path string, params map[stri
 		values.Set(k, v)
 	}
 	return c.Get(ctx, path, values)
+}
+
+func httpStatusToErrorCode(status int) ErrorCode {
+	switch {
+	case status == 401:
+		return ErrAuthFailed
+	case status == 403:
+		return ErrAuthFailed
+	case status == 400:
+		return ErrBadRequest
+	case status == 404:
+		return ErrNotFound
+	case status >= 500:
+		return ErrServer
+	default:
+		return ErrInternal
+	}
 }
 
 func parseMediaType(contentType string) string {
