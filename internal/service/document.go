@@ -69,6 +69,7 @@ func (s *DocumentService) listDateRange(ctx context.Context, opts ListOptions) (
 
 	var allResults []DocumentInfo
 	var warnings []string
+	var lastErr error
 	rateLimit := opts.RateLimit
 	if rateLimit == 0 {
 		rateLimit = 100 * time.Millisecond
@@ -83,6 +84,7 @@ func (s *DocumentService) listDateRange(ctx context.Context, opts ListOptions) (
 
 		docs, fetchErr := s.fetchDate(ctx, date)
 		if fetchErr != nil {
+			lastErr = fetchErr
 			warnings = append(warnings, fmt.Sprintf("%s: %s", date, classifyWarning(fetchErr)))
 			if i < len(dates)-1 {
 				time.Sleep(rateLimit)
@@ -104,8 +106,13 @@ func (s *DocumentService) listDateRange(ctx context.Context, opts ListOptions) (
 	}
 
 	if len(allResults) == 0 && len(warnings) == len(dates) {
+		// Propagate the error code from the last failure
+		code := api.ErrServer
+		if edinetErr, ok := lastErr.(*api.EDINETError); ok {
+			code = edinetErr.Code
+		}
 		return nil, &api.EDINETError{
-			Code:    api.ErrServer,
+			Code:    code,
 			Message: fmt.Sprintf("all %d dates failed: %s", len(dates), strings.Join(warnings, "; ")),
 		}
 	}

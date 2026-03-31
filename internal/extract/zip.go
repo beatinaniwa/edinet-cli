@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -49,7 +50,7 @@ func ReadFromZip(zipData []byte, pattern string) ([]ZipEntry, error) {
 			continue
 		}
 
-		matched, err := filepath.Match(pattern, f.Name)
+		matched, err := path.Match(pattern, f.Name)
 		if err != nil {
 			return nil, fmt.Errorf("invalid pattern %q: %w", pattern, err)
 		}
