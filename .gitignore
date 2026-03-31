@@ -1,0 +1,9 @@
+/edinet-cli
+/edinet
+*.exe
+.env
+.DS_Store
+*.test
+coverage.out
+coverage.html
+dist/
