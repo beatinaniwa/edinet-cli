@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
+
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/transform"
 )
 
 // CompanyEntry represents a single entry from the EDINET code list.
@@ -56,6 +60,12 @@ func (r *Registry) LoadFromCSV(data []byte) error {
 
 	// Strip BOM if present
 	data = stripBOM(data)
+
+	// Convert Shift-JIS to UTF-8 if needed
+	data, err := ensureUTF8(data)
+	if err != nil {
+		return fmt.Errorf("failed to convert encoding: %w", err)
+	}
 
 	reader := csv.NewReader(bytes.NewReader(data))
 	reader.LazyQuotes = true
@@ -138,11 +148,42 @@ func validateHeaders(headers []string) error {
 	if len(headers) < len(expectedHeaders) {
 		return fmt.Errorf("unexpected registry format: expected %d columns, got %d", len(expectedHeaders), len(headers))
 	}
-	// Check that the first expected header exists
-	if strings.TrimSpace(headers[0]) != expectedHeaders[0] {
+	// Check that the first expected header matches (normalize full-width ASCII)
+	got := normalizeFullWidth(strings.TrimSpace(headers[0]))
+	if got != expectedHeaders[0] {
 		return fmt.Errorf("unexpected registry format: missing column %q, got %q", expectedHeaders[0], headers[0])
 	}
 	return nil
+}
+
+// normalizeFullWidth converts full-width ASCII characters (Ａ-Ｚ, ａ-ｚ, ０-９) to half-width.
+func normalizeFullWidth(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r >= 'Ａ' && r <= 'Ｚ' {
+			b.WriteRune(r - 'Ａ' + 'A')
+		} else if r >= 'ａ' && r <= 'ｚ' {
+			b.WriteRune(r - 'ａ' + 'a')
+		} else if r >= '０' && r <= '９' {
+			b.WriteRune(r - '０' + '0')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// ensureUTF8 converts Shift-JIS data to UTF-8 if the data is not valid UTF-8.
+func ensureUTF8(data []byte) ([]byte, error) {
+	if utf8.Valid(data) {
+		return data, nil
+	}
+	decoded, err := io.ReadAll(transform.NewReader(bytes.NewReader(data), japanese.ShiftJIS.NewDecoder()))
+	if err != nil {
+		return data, err
+	}
+	return decoded, nil
 }
 
 func stripBOM(data []byte) []byte {
