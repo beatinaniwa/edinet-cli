@@ -98,6 +98,27 @@ func TestRegistry_FindBySecCode(t *testing.T) {
 	}
 }
 
+func TestLoadFromCSV_ShiftJIS(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/edinetcode_sample_sjis.csv")
+	if err != nil {
+		t.Fatalf("failed to read Shift-JIS fixture: %v", err)
+	}
+
+	r := &Registry{}
+	if err := r.LoadFromCSV(data); err != nil {
+		t.Fatalf("LoadFromCSV(Shift-JIS) error = %v", err)
+	}
+	if len(r.Entries) != 1 {
+		t.Fatalf("len(Entries) = %d, want 1", len(r.Entries))
+	}
+	if r.Entries[0].EdinetCode != "E02144" {
+		t.Errorf("EdinetCode = %q, want E02144", r.Entries[0].EdinetCode)
+	}
+	if r.Entries[0].SubmitterName != "トヨタ自動車株式会社" {
+		t.Errorf("SubmitterName = %q, want トヨタ自動車株式会社", r.Entries[0].SubmitterName)
+	}
+}
+
 func TestRegistry_FindBySecCode_FourDigit(t *testing.T) {
 	data, _ := os.ReadFile("../../testdata/edinetcode_sample.csv")
 	r := &Registry{}
