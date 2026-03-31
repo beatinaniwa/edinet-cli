@@ -65,6 +65,13 @@ func (s *CompanyService) Filings(ctx context.Context, code string, opts FilingsO
 		to = nowJST.Format("2006-01-02")
 	}
 
+	// Validate that from <= to after applying defaults
+	fromTime, _ := time.Parse("2006-01-02", from)
+	toTime, _ := time.Parse("2006-01-02", to)
+	if fromTime.After(toTime) {
+		return nil, fmt.Errorf("date range is inverted: from %s > to %s", from, to)
+	}
+
 	return s.docSvc.List(ctx, ListOptions{
 		From:       from,
 		To:         to,

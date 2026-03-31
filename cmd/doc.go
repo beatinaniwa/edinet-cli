@@ -153,6 +153,9 @@ var docDataCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		docID := args[0]
+		if !isValidDocID(docID) {
+			return &api.EDINETError{Code: api.ErrValidation, Message: fmt.Sprintf("invalid docID %q", docID)}
+		}
 
 		if app.Config.SubscriptionKey == "" {
 			return &api.EDINETError{Code: api.ErrAuth, Message: "EDINET_API_KEY environment variable is required"}
@@ -186,6 +189,9 @@ var docTextCmd = &cobra.Command{
 			return &api.EDINETError{Code: api.ErrValidation, Message: "docID argument is required"}
 		}
 		docID := args[0]
+		if !isValidDocID(docID) {
+			return &api.EDINETError{Code: api.ErrValidation, Message: fmt.Sprintf("invalid docID %q", docID)}
+		}
 
 		if app.Config.SubscriptionKey == "" {
 			return &api.EDINETError{Code: api.ErrAuth, Message: "EDINET_API_KEY environment variable is required"}
