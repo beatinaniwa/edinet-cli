@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -90,13 +91,19 @@ var companyFilingsCmd = &cobra.Command{
 			return &api.EDINETError{Code: api.ErrAuth, Message: "EDINET_API_KEY environment variable is required"}
 		}
 
-		reg, err := loadRegistry()
-		if err != nil {
-			return err
-		}
-
 		client := api.NewClient(app.Config.SubscriptionKey, "https://api.edinet-fsa.go.jp", app.Config.Debug)
 		docSvc := service.NewDocumentService(client, app.Cache, cmd.ErrOrStderr())
+
+		// Only load registry when needed (not for EDINET code inputs)
+		var reg *company.Registry
+		if !isEdinetCode(code) {
+			var err error
+			reg, err = loadRegistry()
+			if err != nil {
+				return err
+			}
+		}
+
 		companySvc := service.NewCompanyService(reg, docSvc)
 
 		result, err := companySvc.Filings(cmd.Context(), code, service.FilingsOptions{
@@ -179,6 +186,12 @@ func loadRegistry() (*company.Registry, error) {
 }
 
 // downloadCodeListCSV downloads the EDINET code list ZIP and extracts the CSV.
+var edinetCodeRe = regexp.MustCompile(`^E\d{5}$`)
+
+func isEdinetCode(s string) bool {
+	return edinetCodeRe.MatchString(s)
+}
+
 func downloadCodeListCSV() ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(edinetCodeListURL)
