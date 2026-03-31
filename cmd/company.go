@@ -196,12 +196,12 @@ func downloadCodeListCSV() ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(edinetCodeListURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download code list: %w", err)
+		return nil, &api.EDINETError{Code: api.ErrNetwork, Message: fmt.Sprintf("failed to download code list: %v", err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
+		return nil, &api.EDINETError{Code: api.ErrNetwork, Message: fmt.Sprintf("code list download failed with status %d", resp.StatusCode)}
 	}
 
 	body, err := io.ReadAll(resp.Body)

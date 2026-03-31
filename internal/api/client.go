@@ -55,7 +55,7 @@ func (c *Client) doRequest(ctx context.Context, path string, params url.Values) 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, "", ctx.Err()
+			return nil, "", &EDINETError{Code: ErrTimeout, Message: fmt.Sprintf("request cancelled: %v", ctx.Err())}
 		}
 		return nil, "", &EDINETError{Code: ErrNetwork, Message: fmt.Sprintf("request failed: %v", err)}
 	}

@@ -46,7 +46,7 @@ func (s *DocumentService) List(ctx context.Context, opts ListOptions) (*ListResu
 }
 
 func (s *DocumentService) listSingleDate(ctx context.Context, opts ListOptions) (*ListResult, error) {
-	docs, err := s.fetchDate(ctx, opts.Date)
+	docs, _, err := s.fetchDate(ctx, opts.Date)
 	if err != nil {
 		return nil, err
 	}
@@ -82,11 +82,11 @@ func (s *DocumentService) listDateRange(ctx context.Context, opts ListOptions) (
 
 		s.reportProgress(date, i+1, len(dates))
 
-		docs, fetchErr := s.fetchDate(ctx, date)
+		docs, fromCache, fetchErr := s.fetchDate(ctx, date)
 		if fetchErr != nil {
 			lastErr = fetchErr
 			warnings = append(warnings, fmt.Sprintf("%s: %s", date, classifyWarning(fetchErr)))
-			if i < len(dates)-1 {
+			if i < len(dates)-1 && !fromCache {
 				time.Sleep(rateLimit)
 			}
 			continue
@@ -100,7 +100,8 @@ func (s *DocumentService) listDateRange(ctx context.Context, opts ListOptions) (
 			break
 		}
 
-		if i < len(dates)-1 {
+		// Skip rate-limit delay when result came from cache (no API call made)
+		if i < len(dates)-1 && !fromCache {
 			time.Sleep(rateLimit)
 		}
 	}
@@ -127,7 +128,9 @@ func (s *DocumentService) listDateRange(ctx context.Context, opts ListOptions) (
 	}, nil
 }
 
-func (s *DocumentService) fetchDate(ctx context.Context, date string) ([]api.Document, error) {
+// fetchDate returns documents for a single date. fromCache indicates whether
+// the result came from cache (so callers can skip rate-limit delays).
+func (s *DocumentService) fetchDate(ctx context.Context, date string) (docs []api.Document, fromCache bool, err error) {
 	cacheKey := "doclist/" + date + ".json"
 	maxAge := 24 * time.Hour
 	jst := time.FixedZone("JST", 9*60*60)
@@ -135,22 +138,22 @@ func (s *DocumentService) fetchDate(ctx context.Context, date string) ([]api.Doc
 		maxAge = 5 * time.Minute
 	}
 
-	// Try cache first — store raw JSON bytes to avoid marshal/unmarshal overhead
-	if data, err := s.cache.Get(cacheKey, maxAge); err == nil {
+	// Try cache first
+	if data, cacheErr := s.cache.Get(cacheKey, maxAge); cacheErr == nil {
 		var resp api.DocumentListResponse
 		if jsonErr := json.Unmarshal(data, &resp); jsonErr == nil {
-			return resp.Results, nil
+			return resp.Results, true, nil
 		}
 	}
 
 	// Cache miss — fetch via API and cache the raw response
-	resp, rawBody, err := s.client.GetDocumentListRaw(ctx, date, 2)
-	if err != nil {
-		return nil, err
+	resp, rawBody, fetchErr := s.client.GetDocumentListRaw(ctx, date, 2)
+	if fetchErr != nil {
+		return nil, false, fetchErr
 	}
 
 	_ = s.cache.Set(cacheKey, rawBody)
-	return resp.Results, nil
+	return resp.Results, false, nil
 }
 
 func (s *DocumentService) reportProgress(date string, index, total int) {
