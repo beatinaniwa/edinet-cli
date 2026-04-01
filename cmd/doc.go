@@ -30,8 +30,9 @@ var (
 	docTextSection      string
 	docTextListSections bool
 
-	docFinancialStatement      string
+	docFinancialStatement       string
 	docFinancialNonConsolidated bool
+	docFinancialSummaryOnly     bool
 )
 
 var downloadTypeMap = map[string]int{
@@ -209,6 +210,9 @@ var docFinancialCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if docFinancialSummaryOnly {
+			result.StripStatements()
+		}
 		return outputResult(cmd.OutOrStdout(), result)
 	},
 }
@@ -350,6 +354,7 @@ func init() {
 
 	docFinancialCmd.Flags().StringVar(&docFinancialStatement, "statement", "all", "Statement type: bs, pl, cf, all")
 	docFinancialCmd.Flags().BoolVar(&docFinancialNonConsolidated, "non-consolidated", false, "Prefer non-consolidated statements")
+	docFinancialCmd.Flags().BoolVar(&docFinancialSummaryOnly, "summary-only", false, "Output only summary metrics without detailed statements")
 
 	docCmd.AddCommand(docListCmd)
 	docCmd.AddCommand(docGetCmd)

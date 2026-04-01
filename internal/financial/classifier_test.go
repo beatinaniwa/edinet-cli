@@ -591,3 +591,116 @@ func TestClassify_JPGAAPNoncurrentAssets(t *testing.T) {
 		t.Errorf("Statement = %q, want BS", c.Statement)
 	}
 }
+
+// --- SummaryOfBusinessResults fallback element tests ---
+
+func TestClassify_SummaryOfBusinessResults_JPGAAP(t *testing.T) {
+	tests := []struct {
+		name      string
+		elementID string
+		pointType string
+		wantStmt  StatementType
+		wantKey   string
+	}{
+		{"JP-GAAP revenue summary", "jpcrp_cor:NetSalesSummaryOfBusinessResults", "duration", StmtPL, "revenue"},
+		{"JP-GAAP operating income summary", "jpcrp_cor:OperatingIncomeSummaryOfBusinessResults", "duration", StmtPL, "operating_income"},
+		{"JP-GAAP ordinary income summary", "jpcrp_cor:OrdinaryIncomeSummaryOfBusinessResults", "duration", StmtPL, "ordinary_income"},
+		{"JP-GAAP net income summary", "jpcrp_cor:NetIncomeSummaryOfBusinessResults", "duration", StmtPL, "net_income"},
+		{"JP-GAAP total assets summary", "jpcrp_cor:TotalAssetsSummaryOfBusinessResults", "instant", StmtBS, "total_assets"},
+		{"JP-GAAP net assets summary", "jpcrp_cor:NetAssetsSummaryOfBusinessResults", "instant", StmtBS, "net_assets"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := Classify(tt.elementID, tt.pointType)
+			if c.Statement != tt.wantStmt {
+				t.Errorf("Statement = %q, want %q", c.Statement, tt.wantStmt)
+			}
+			if c.SummaryKey != tt.wantKey {
+				t.Errorf("SummaryKey = %q, want %q", c.SummaryKey, tt.wantKey)
+			}
+		})
+	}
+}
+
+func TestClassify_SummaryOfBusinessResults_IFRS(t *testing.T) {
+	tests := []struct {
+		name      string
+		elementID string
+		pointType string
+		wantStmt  StatementType
+		wantKey   string
+	}{
+		{"IFRS revenue summary", "jpcrp_cor:RevenueIFRSSummaryOfBusinessResults", "duration", StmtPL, "revenue"},
+		{"IFRS net income summary", "jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults", "duration", StmtPL, "net_income"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := Classify(tt.elementID, tt.pointType)
+			if c.Statement != tt.wantStmt {
+				t.Errorf("Statement = %q, want %q", c.Statement, tt.wantStmt)
+			}
+			if c.SummaryKey != tt.wantKey {
+				t.Errorf("SummaryKey = %q, want %q", c.SummaryKey, tt.wantKey)
+			}
+		})
+	}
+}
+
+func TestClassify_SummaryOfBusinessResults_USGAAP(t *testing.T) {
+	tests := []struct {
+		name      string
+		elementID string
+		pointType string
+		wantStmt  StatementType
+		wantKey   string
+	}{
+		{"US GAAP revenue summary", "jpcrp_cor:RevenuesUSGAAPSummaryOfBusinessResults", "duration", StmtPL, "revenue"},
+		{"US GAAP net income summary", "jpcrp_cor:NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults", "duration", StmtPL, "net_income"},
+		{"US GAAP total assets summary", "jpcrp_cor:TotalAssetsUSGAAPSummaryOfBusinessResults", "instant", StmtBS, "total_assets"},
+		{"US GAAP net assets summary", "jpcrp_cor:EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults", "instant", StmtBS, "net_assets"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := Classify(tt.elementID, tt.pointType)
+			if c.Statement != tt.wantStmt {
+				t.Errorf("Statement = %q, want %q", c.Statement, tt.wantStmt)
+			}
+			if c.SummaryKey != tt.wantKey {
+				t.Errorf("SummaryKey = %q, want %q", c.SummaryKey, tt.wantKey)
+			}
+		})
+	}
+}
+
+func TestClassify_CompanySuffix_RevenueVariants(t *testing.T) {
+	tests := []struct {
+		name      string
+		elementID string
+		wantKey   string
+	}{
+		{"SalesAndFinancialServicesRevenueIFRS", "jpcrp030000-asr_E01777-000:SalesAndFinancialServicesRevenueIFRS", "revenue"},
+		{"SalesAndFinancialServicesRevenueIFRSKeyFinancialData", "jpcrp030000-asr_E01777-000:SalesAndFinancialServicesRevenueIFRSKeyFinancialData", "revenue"},
+		{"OperatingProfitLossIFRSKeyFinancialData", "jpcrp030000-asr_E01777-000:OperatingProfitLossIFRSKeyFinancialData", "operating_income"},
+		{"NetSalesKeyFinancialData", "jpcrp030000-asr_E02367-000:NetSalesKeyFinancialData", "revenue"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := Classify(tt.elementID, "duration")
+			if c.SummaryKey != tt.wantKey {
+				t.Errorf("SummaryKey = %q, want %q", c.SummaryKey, tt.wantKey)
+			}
+		})
+	}
+}
+
+// --- SortOrder precedence: main statement > company-specific > SummaryOfBusinessResults ---
+
+func TestClassify_SortOrder_MainStatementBeforeFallback(t *testing.T) {
+	// Main table revenue should have lower SortOrder than SummaryOfBusinessResults revenue
+	main := Classify("jpigp_cor:RevenueIFRS", "duration")
+	fallback := Classify("jpcrp_cor:RevenueIFRSSummaryOfBusinessResults", "duration")
+
+	if main.SortOrder >= fallback.SortOrder {
+		t.Errorf("main SortOrder (%d) should be < fallback SortOrder (%d)", main.SortOrder, fallback.SortOrder)
+	}
+}

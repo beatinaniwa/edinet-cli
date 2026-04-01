@@ -296,7 +296,6 @@ func buildResult(rows []parsedRow, opts ParseOpts, warnings []string) (*ParseRes
 	acctStd := detectAccountingStandard(selectedRows)
 
 	// Build statements
-	summary := make(Summary)
 	var statements []FinancialStatement
 	seen := make(map[dedupeKey]bool)
 
@@ -307,11 +306,9 @@ func buildResult(rows []parsedRow, opts ParseOpts, warnings []string) (*ParseRes
 		}
 	}
 
-	// Build summary from current period items
-	buildSummary(summary, statements)
-
+	// Build summary from current period items and derive metrics
 	return &ParseResult{
-		Summary:       summary,
+		Summary:       BuildAndDeriveSummary(statements),
 		Statements:    statements,
 		AccountingStd: acctStd,
 		Consolidated:  hasConsolidatedStmt,
@@ -363,6 +360,7 @@ func selectConsolidation(sr *consolidationGroup, st StatementType, opts ParseOpt
 		}
 		// Neither consolidated nor non-consolidated, but neutral rows exist
 		if len(neutralOther) > 0 {
+			*warnings = append(*warnings, fmt.Sprintf("statement %s: non-consolidated data not available; summary values populated from SummaryOfBusinessResults (neutral) rows", st))
 			return nonConsRows, false
 		}
 		return nil, false
@@ -398,6 +396,39 @@ func detectAccountingStandard(rows []parsedRow) string {
 			ifrsCount++
 		case "jppfs_cor":
 			jpgaapCount++
+		case "jpcrp_cor":
+			// Only count SummaryOfBusinessResults/KeyFinancialData elements
+			// with core financial summaryKeys as accounting standard indicators.
+			// Cross-standard items (dividend, shares, eps) do not imply a standard.
+			localName := elementLocalName(r.elementID)
+			if !strings.HasSuffix(localName, "SummaryOfBusinessResults") && !strings.HasSuffix(localName, "KeyFinancialData") {
+				continue
+			}
+			// Only count if the element maps to a core financial metric
+			key := r.classification.SummaryKey
+			if key != "revenue" && key != "operating_income" && key != "ordinary_income" &&
+				key != "net_income" && key != "total_assets" && key != "net_assets" {
+				continue
+			}
+			if strings.Contains(localName, "IFRS") {
+				ifrsCount++
+			} else if strings.Contains(localName, "USGAAP") {
+				// US GAAP detection: currently not needed as a separate standard
+			} else {
+				// Non-IFRS/USGAAP jpcrp_cor rows with core financial summaryKeys
+				// imply JP-GAAP (e.g. NetSalesSummaryOfBusinessResults).
+				jpgaapCount++
+			}
+		default:
+			// Company-specific elements (jpcrp030000-asr_*)
+			if strings.HasPrefix(prefix, "jpcrp030000-asr_") && r.classification.SummaryKey != "" {
+				localName := elementLocalName(r.elementID)
+				if strings.Contains(localName, "IFRS") {
+					ifrsCount++
+				}
+				// Non-IFRS company-specific rows (e.g. NetSalesKeyFinancialData)
+				// are standard-neutral and should not influence detection.
+			}
 		}
 	}
 
@@ -419,6 +450,14 @@ func elementPrefix(elementID string) string {
 		return elementID[:idx]
 	}
 	return ""
+}
+
+// elementLocalName extracts the local name from an element ID (after the colon).
+func elementLocalName(elementID string) string {
+	if idx := strings.Index(elementID, ":"); idx >= 0 {
+		return elementID[idx+1:]
+	}
+	return elementID
 }
 
 // buildStatement constructs a FinancialStatement from rows.
@@ -534,38 +573,3 @@ func periodOrder(period string) int {
 	}
 }
 
-// buildSummary populates the Summary map from current period items.
-func buildSummary(summary Summary, statements []FinancialStatement) {
-	additiveKeys := map[string]bool{
-		"interest_bearing_debt": true,
-	}
-
-	for _, stmt := range statements {
-		for _, pd := range stmt.Periods {
-			if pd.Period != "current" && pd.Period != "filing_date" {
-				continue
-			}
-			for _, item := range pd.Items {
-				if item.SummaryKey == "" || item.Value == nil {
-					continue
-				}
-
-				if additiveKeys[item.SummaryKey] {
-					existing := summary[item.SummaryKey]
-					if existing == nil {
-						v := *item.Value
-						summary[item.SummaryKey] = &v
-					} else {
-						v := *existing + *item.Value
-						summary[item.SummaryKey] = &v
-					}
-				} else {
-					if _, exists := summary[item.SummaryKey]; !exists {
-						v := *item.Value
-						summary[item.SummaryKey] = &v
-					}
-				}
-			}
-		}
-	}
-}
