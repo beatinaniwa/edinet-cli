@@ -81,11 +81,17 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 	}
 
 	// Phase 3: extract summary items from bestPeriod, then supplement from filing_date.
-	// bestPeriod is processed first so non-additive keys follow first-wins rule.
-	// Additive keys (e.g. interest_bearing_debt) are accumulated within a single period
-	// to avoid mixing debt snapshots from different points in time. Filing_date only
-	// contributes additive keys if they were not already set by bestPeriod.
-	extractItems := func(target string, additive bool) {
+	// Additive keys (e.g. interest_bearing_debt) are accumulated within each period
+	// (CL + NCL debt), but once set by one period they are not overwritten by another.
+	extractPeriod := func(target string) {
+		// Track which additive keys were already set before this period.
+		frozenAdditive := make(map[string]bool, len(additiveKeys))
+		for k := range additiveKeys {
+			if _, exists := summary[k]; exists {
+				frozenAdditive[k] = true
+			}
+		}
+
 		for _, stmt := range statements {
 			for _, pd := range stmt.Periods {
 				if pd.Period != target {
@@ -96,22 +102,16 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 						continue
 					}
 					if additiveKeys[item.SummaryKey] {
-						if additive {
-							// Within the primary period: accumulate (e.g. CL + NCL debt)
-							existing := summary[item.SummaryKey]
-							if existing == nil {
-								v := *item.Value
-								summary[item.SummaryKey] = &v
-							} else {
-								v := *existing + *item.Value
-								summary[item.SummaryKey] = &v
-							}
+						if frozenAdditive[item.SummaryKey] {
+							continue // already set by a prior period
+						}
+						existing := summary[item.SummaryKey]
+						if existing == nil {
+							v := *item.Value
+							summary[item.SummaryKey] = &v
 						} else {
-							// Supplemental period: only fill if not already set
-							if _, exists := summary[item.SummaryKey]; !exists {
-								v := *item.Value
-								summary[item.SummaryKey] = &v
-							}
+							v := *existing + *item.Value
+							summary[item.SummaryKey] = &v
 						}
 					} else {
 						if _, exists := summary[item.SummaryKey]; !exists {
@@ -125,11 +125,9 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 	}
 
 	if bestPeriod != "" {
-		extractItems(bestPeriod, true)
-		extractItems("filing_date", false) // supplement only, no additive accumulation
-	} else {
-		extractItems("filing_date", true) // filing_date is the primary source
+		extractPeriod(bestPeriod)
 	}
+	extractPeriod("filing_date")
 
 	return bestPeriod
 }
