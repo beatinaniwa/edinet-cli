@@ -82,9 +82,10 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 
 	// Phase 3: extract summary items from bestPeriod, then supplement from filing_date.
 	// bestPeriod is processed first so non-additive keys follow first-wins rule.
-	// Additive keys (e.g. interest_bearing_debt) are only accumulated within
-	// bestPeriod to avoid mixing debt snapshots from different points in time.
-	extractItems := func(target string, allowAdditive bool) {
+	// Additive keys (e.g. interest_bearing_debt) are accumulated within a single period
+	// to avoid mixing debt snapshots from different points in time. Filing_date only
+	// contributes additive keys if they were not already set by bestPeriod.
+	extractItems := func(target string, additive bool) {
 		for _, stmt := range statements {
 			for _, pd := range stmt.Periods {
 				if pd.Period != target {
@@ -95,16 +96,22 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 						continue
 					}
 					if additiveKeys[item.SummaryKey] {
-						if !allowAdditive {
-							continue
-						}
-						existing := summary[item.SummaryKey]
-						if existing == nil {
-							v := *item.Value
-							summary[item.SummaryKey] = &v
+						if additive {
+							// Within the primary period: accumulate (e.g. CL + NCL debt)
+							existing := summary[item.SummaryKey]
+							if existing == nil {
+								v := *item.Value
+								summary[item.SummaryKey] = &v
+							} else {
+								v := *existing + *item.Value
+								summary[item.SummaryKey] = &v
+							}
 						} else {
-							v := *existing + *item.Value
-							summary[item.SummaryKey] = &v
+							// Supplemental period: only fill if not already set
+							if _, exists := summary[item.SummaryKey]; !exists {
+								v := *item.Value
+								summary[item.SummaryKey] = &v
+							}
 						}
 					} else {
 						if _, exists := summary[item.SummaryKey]; !exists {
@@ -120,7 +127,7 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 	if bestPeriod != "" {
 		extractItems(bestPeriod, true)
 	}
-	extractItems("filing_date", false) // supplemental only, no additive accumulation
+	extractItems("filing_date", false)
 
 	return bestPeriod
 }
