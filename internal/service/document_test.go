@@ -240,3 +240,26 @@ func TestDocumentService_List_Reverse(t *testing.T) {
 		t.Errorf("requested %d dates, want <=2 (should stop early)", len(requestedDates))
 	}
 }
+
+func TestDocumentService_List_FilterByDocDescription(t *testing.T) {
+	client, _ := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"metadata":{"status":"200","message":"OK","parameter":{"date":"2025-06-20","type":"2"},"resultset":{"count":3},"processDateTime":"2025-06-20 13:01"},"results":[` +
+			`{"seqNumber":1,"docID":"S1","edinetCode":null,"secCode":null,"JCN":null,"filerName":null,"fundCode":null,"ordinanceCode":null,"formCode":null,"docTypeCode":"120","periodStart":null,"periodEnd":null,"submitDateTime":null,"docDescription":"有価証券報告書－第121期","issuerEdinetCode":null,"subjectEdinetCode":null,"subsidiaryEdinetCode":null,"currentReportReason":null,"parentDocID":null,"opeDateTime":null,"withdrawalStatus":"0","docInfoEditStatus":"0","disclosureStatus":"0","xbrlFlag":"0","pdfFlag":"0","attachDocFlag":"0","englishDocFlag":"0","csvFlag":"0","legalStatus":"1"},` +
+			`{"seqNumber":2,"docID":"S2","edinetCode":null,"secCode":null,"JCN":null,"filerName":null,"fundCode":null,"ordinanceCode":null,"formCode":null,"docTypeCode":"030","periodStart":null,"periodEnd":null,"submitDateTime":null,"docDescription":"有価証券届出書（新規公開時）","issuerEdinetCode":null,"subjectEdinetCode":null,"subsidiaryEdinetCode":null,"currentReportReason":null,"parentDocID":null,"opeDateTime":null,"withdrawalStatus":"0","docInfoEditStatus":"0","disclosureStatus":"0","xbrlFlag":"0","pdfFlag":"0","attachDocFlag":"0","englishDocFlag":"0","csvFlag":"0","legalStatus":"1"},` +
+			`{"seqNumber":3,"docID":"S3","edinetCode":null,"secCode":null,"JCN":null,"filerName":null,"fundCode":null,"ordinanceCode":null,"formCode":null,"docTypeCode":"120","periodStart":null,"periodEnd":null,"submitDateTime":null,"docDescription":null,"issuerEdinetCode":null,"subjectEdinetCode":null,"subsidiaryEdinetCode":null,"currentReportReason":null,"parentDocID":null,"opeDateTime":null,"withdrawalStatus":"0","docInfoEditStatus":"0","disclosureStatus":"0","xbrlFlag":"0","pdfFlag":"0","attachDocFlag":"0","englishDocFlag":"0","csvFlag":"0","legalStatus":"1"}` +
+			`]}`))
+	})
+
+	svc := NewDocumentService(client, cache.NoopCache{}, nil)
+	result, err := svc.List(context.Background(), ListOptions{Date: "2025-06-20", DocDescription: "届出書"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.Results) != 1 {
+		t.Fatalf("len(Results) = %d, want 1 (filtered by doc description substring)", len(result.Results))
+	}
+	if result.Results[0].DocID != "S2" {
+		t.Errorf("DocID = %q, want %q", result.Results[0].DocID, "S2")
+	}
+}

@@ -39,6 +39,7 @@ type FinancialStatement struct {
 // ParseResult is the output of the CSV parser before service-layer metadata is added.
 type ParseResult struct {
 	Summary       Summary              `json:"summary"`
+	SummaryPeriod string               `json:"summary_period"`
 	Statements    []FinancialStatement `json:"statements"`
 	AccountingStd string               `json:"accounting_standard"`
 	Consolidated  bool                 `json:"consolidated"`
@@ -75,6 +76,7 @@ type FinancialData struct {
 	AccountingStd string               `json:"accounting_standard"`
 	Consolidated  bool                 `json:"consolidated"`
 	Summary       Summary              `json:"summary"`
+	SummaryPeriod string               `json:"summary_period"`
 	Statements    []FinancialStatement `json:"statements"`
 	Warnings      []string             `json:"warnings,omitempty"`
 }

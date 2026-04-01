@@ -441,3 +441,64 @@ func newTestServer(t *testing.T, handler http.Handler) *httptest.Server {
 	t.Cleanup(server.Close)
 	return server
 }
+
+// makeFilingStyleCSVZip creates a ZIP with filing-style CSV (Prior1Year contexts only).
+func makeFilingStyleCSVZip(t *testing.T) []byte {
+	t.Helper()
+	return createCSVZip(t, "XBRL_TO_CSV/jpcrp020400-srs-001_E41257-000_2025-04-30_01_2026-01-09.csv",
+		[]string{"要素ID", "項目名", "コンテキストID", "連結・個別", "期間・時点", "ユニットID", "単位", "値"},
+		[][]string{
+			{"jpcrp_cor:NetSalesSummaryOfBusinessResults", "売上高、経営指標等", "Prior1YearDuration", "個別", "期間", "JPY", "円", "9426601000"},
+			{"jpcrp_cor:OrdinaryIncomeSummaryOfBusinessResults", "経常利益、経営指標等", "Prior1YearDuration", "個別", "期間", "JPY", "円", "1145214000"},
+			{"jpcrp_cor:TotalAssetsSummaryOfBusinessResults", "総資産額、経営指標等", "Prior1YearInstant", "個別", "時点", "JPY", "円", "6160640000"},
+			{"jpcrp_cor:NetAssetsSummaryOfBusinessResults", "純資産額、経営指標等", "Prior1YearInstant", "個別", "時点", "JPY", "円", "4261992000"},
+		},
+	)
+}
+
+func TestFinancialService_GetStatements_FilingStyleCSV(t *testing.T) {
+	zipData := makeFilingStyleCSVZip(t)
+	client, _ := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(zipData)
+	})
+
+	svc := NewFinancialService(client, cache.NoopCache{})
+	result, err := svc.GetStatements(context.Background(), "S100XF4F", StatementOpts{})
+	if err != nil {
+		t.Fatalf("GetStatements() error = %v", err)
+	}
+	if result.DocID != "S100XF4F" {
+		t.Errorf("DocID = %q, want %q", result.DocID, "S100XF4F")
+	}
+	if result.SummaryPeriod != "prior1" {
+		t.Errorf("SummaryPeriod = %q, want %q", result.SummaryPeriod, "prior1")
+	}
+	if result.Summary == nil {
+		t.Fatal("expected non-nil summary")
+	}
+	if rev := result.Summary["revenue"]; rev == nil || *rev != 9426601000 {
+		t.Errorf("expected revenue=9426601000, got %v", result.Summary["revenue"])
+	}
+	if ta := result.Summary["total_assets"]; ta == nil || *ta != 6160640000 {
+		t.Errorf("expected total_assets=6160640000, got %v", result.Summary["total_assets"])
+	}
+}
+
+func TestFinancialService_GetStatements_FilterRecomputesSummaryPeriod(t *testing.T) {
+	zipData := makeCSVZip(t) // has current period data
+	client, _ := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(zipData)
+	})
+
+	svc := NewFinancialService(client, cache.NoopCache{})
+	result, err := svc.GetStatements(context.Background(), "S100ABCD", StatementOpts{Statement: "pl"})
+	if err != nil {
+		t.Fatalf("GetStatements() error = %v", err)
+	}
+	// After filtering to PL-only, summary should be recomputed with SummaryPeriod
+	if result.SummaryPeriod != "current" {
+		t.Errorf("SummaryPeriod = %q, want %q after statement filter recomputation", result.SummaryPeriod, "current")
+	}
+}

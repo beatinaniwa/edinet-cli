@@ -21,8 +21,9 @@ var (
 	docListDocType    string
 	docListSecCode    string
 	docListEdinetCode string
-	docListFilerName  string
-	docListRateLimit  int
+	docListFilerName      string
+	docListDocDescription string
+	docListRateLimit      int
 
 	docGetType string
 	docGetOut  string
@@ -78,8 +79,9 @@ var docListCmd = &cobra.Command{
 			DocType:    docListDocType,
 			SecCode:    docListSecCode,
 			EdinetCode: docListEdinetCode,
-			FilerName:  docListFilerName,
-			RateLimit:  time.Duration(docListRateLimit) * time.Millisecond,
+			FilerName:      docListFilerName,
+			DocDescription: docListDocDescription,
+			RateLimit:      time.Duration(docListRateLimit) * time.Millisecond,
 		})
 		if err != nil {
 			return err
@@ -344,6 +346,7 @@ func init() {
 	docListCmd.Flags().StringVar(&docListSecCode, "sec-code", "", "Filter by securities code")
 	docListCmd.Flags().StringVar(&docListEdinetCode, "edinet-code", "", "Filter by EDINET code")
 	docListCmd.Flags().StringVar(&docListFilerName, "filer-name", "", "Filter by filer name (substring match)")
+	docListCmd.Flags().StringVar(&docListDocDescription, "doc-description", "", "Filter by document description (substring match)")
 	docListCmd.Flags().IntVar(&docListRateLimit, "rate-limit", 100, "Rate limit between requests in ms")
 
 	docGetCmd.Flags().StringVar(&docGetType, "type", "", "Document type: xbrl, pdf, attach, english, csv (required)")

@@ -52,6 +52,22 @@ func TestListCommands_HasAllTopLevel(t *testing.T) {
 	}
 }
 
+func TestListCommands_DocListHasDocDescriptionFlag(t *testing.T) {
+	cmds := ListCommands()
+	for _, c := range cmds {
+		if c.Name == "doc list" {
+			for _, f := range c.Flags {
+				if f.Name == "--doc-description" {
+					return // found
+				}
+			}
+			t.Error("doc list command missing --doc-description flag in schema")
+			return
+		}
+	}
+	t.Error("doc list command not found in schema")
+}
+
 func TestListSections_HasKnownSections(t *testing.T) {
 	sections := ListSections()
 	if len(sections) == 0 {

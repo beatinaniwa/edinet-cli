@@ -131,6 +131,16 @@ func TestDocFinancial_InvalidStatement(t *testing.T) {
 	expectErrorCode(t, stderr, "VALIDATION_ERROR")
 }
 
+func TestDocListCmd_HasDocDescriptionFlag(t *testing.T) {
+	f := docListCmd.Flags().Lookup("doc-description")
+	if f == nil {
+		t.Fatal("doc list command missing --doc-description flag")
+	}
+	if f.DefValue != "" {
+		t.Errorf("--doc-description default = %q, want empty string", f.DefValue)
+	}
+}
+
 func TestDocText_ListSectionsOutput(t *testing.T) {
 	stdout, _, code := executeCommand("doc", "text", "--list-sections")
 	if code != 0 {
