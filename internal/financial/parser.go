@@ -354,7 +354,7 @@ func selectConsolidation(sr *consolidationGroup, st StatementType, opts ParseOpt
 			return nil, false
 		}
 		// Explicit non-consolidated — do not include "other" (IFRS consolidated)
-		if hasNonCons {
+		if hasNonCons || len(neutralOther) > 0 {
 			return nonConsRows, false
 		}
 		if hasCons {

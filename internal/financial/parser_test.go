@@ -939,6 +939,35 @@ func TestParse_AccountingStdFromSelectedRows(t *testing.T) {
 	}
 }
 
+// --- Neutral-only rows preserved in explicit non-consolidated mode ---
+
+func TestParse_NeutralOnlyRows_NonConsolidated(t *testing.T) {
+	// When only neutral "other" rows exist (jpcrp_cor) with no explicit
+	// non-consolidated rows, explicit non-consolidated mode should still
+	// return those neutral rows rather than dropping the statement.
+	nonCons := false
+	file := makeCSVFile(
+		"jpcrp030000-asr-001_E99999-000_2025-03-31_01_2025-06-20.csv",
+		standardHeaders(),
+		[][]string{
+			// Neutral rows — tagged as "その他" in 連結・個別 column
+			makeRow("jpcrp_cor:NumberOfIssuedSharesAsOfFilingDateTotal", "発行済株式総数", "FilingDateInstant", "当期", "その他", "時点", "shares", "株", "1000000"),
+			makeRow("jpcrp_cor:DividendPerShareSummary", "1株当たり配当額", "CurrentYearDuration", "当期", "その他", "期間", "JPYPerShares", "円", "50"),
+		},
+	)
+
+	csvResult := &extract.CSVDataResult{Files: []extract.CSVFile{file}}
+	result, err := Parse(csvResult, ParseOpts{Consolidated: &nonCons})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// Should have at least one statement with the neutral rows
+	if len(result.Statements) == 0 {
+		t.Fatal("expected at least one statement with neutral rows, got 0")
+	}
+}
+
 // --- Helper assertion ---
 
 func assertSummaryValue(t *testing.T, s Summary, key string, want float64) {
