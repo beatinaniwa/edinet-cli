@@ -306,9 +306,11 @@ func buildResult(rows []parsedRow, opts ParseOpts, warnings []string) (*ParseRes
 		}
 	}
 
-	// Build summary from current period items and derive metrics
+	// Build summary from best available period items and derive metrics
+	summary, summaryPeriod := BuildAndDeriveSummary(statements)
 	return &ParseResult{
-		Summary:       BuildAndDeriveSummary(statements),
+		Summary:       summary,
+		SummaryPeriod: summaryPeriod,
 		Statements:    statements,
 		AccountingStd: acctStd,
 		Consolidated:  hasConsolidatedStmt,

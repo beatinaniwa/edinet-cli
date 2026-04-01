@@ -1154,3 +1154,33 @@ func TestDetectAccountingStandard_NeutralOnlyRows_StaysUnknown(t *testing.T) {
 		t.Errorf("detectAccountingStandard = %q, want %q", std, "unknown")
 	}
 }
+
+// --- Filing-style CSV (IPO prospectus) with Prior1Year contexts ---
+
+func TestParse_FilingStyleCSV_FallbackPeriod(t *testing.T) {
+	file := makeCSVFile(
+		"jpcrp020400-srs-001_E41257-000_2025-04-30_01_2026-01-09.csv",
+		standardHeaders(),
+		[][]string{
+			makeRow("jpcrp_cor:NetSalesSummaryOfBusinessResults", "売上高、経営指標等", "Prior1YearDuration", "前期", "個別", "期間", "JPY", "円", "9426601000"),
+			makeRow("jpcrp_cor:OrdinaryIncomeSummaryOfBusinessResults", "経常利益、経営指標等", "Prior1YearDuration", "前期", "個別", "期間", "JPY", "円", "1145214000"),
+			makeRow("jpcrp_cor:TotalAssetsSummaryOfBusinessResults", "総資産額、経営指標等", "Prior1YearInstant", "前期末", "個別", "時点", "JPY", "円", "6160640000"),
+			makeRow("jpcrp_cor:NetAssetsSummaryOfBusinessResults", "純資産額、経営指標等", "Prior1YearInstant", "前期末", "個別", "時点", "JPY", "円", "4261992000"),
+			makeRow("jpcrp_cor:NetSalesSummaryOfBusinessResults", "売上高、経営指標等", "Prior2YearDuration", "前々期", "個別", "期間", "JPY", "円", "8735439000"),
+		},
+	)
+
+	csvResult := &extract.CSVDataResult{Files: []extract.CSVFile{file}}
+	result, err := Parse(csvResult, ParseOpts{})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	if result.SummaryPeriod != "prior1" {
+		t.Errorf("SummaryPeriod = %q, want %q", result.SummaryPeriod, "prior1")
+	}
+	assertSummaryValue(t, result.Summary, "revenue", 9426601000)
+	assertSummaryValue(t, result.Summary, "ordinary_income", 1145214000)
+	assertSummaryValue(t, result.Summary, "total_assets", 6160640000)
+	assertSummaryValue(t, result.Summary, "net_assets", 4261992000)
+}

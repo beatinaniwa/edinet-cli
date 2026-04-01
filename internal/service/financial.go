@@ -234,6 +234,7 @@ func (s *FinancialService) parseAndBuild(csvResult *extract.CSVDataResult, docID
 		AccountingStd: parseResult.AccountingStd,
 		Consolidated:  parseResult.Consolidated,
 		Summary:       parseResult.Summary,
+		SummaryPeriod: parseResult.SummaryPeriod,
 		Statements:    parseResult.Statements,
 		Warnings:      parseResult.Warnings,
 	}
@@ -270,7 +271,7 @@ func (s *FinancialService) parseAndBuild(csvResult *extract.CSVDataResult, docID
 		data.Consolidated = hasCons
 
 		// Rebuild summary from only the filtered statements
-		data.Summary = financial.BuildAndDeriveSummary(data.Statements)
+		data.Summary, data.SummaryPeriod = financial.BuildAndDeriveSummary(data.Statements)
 	}
 
 	// Empty result check

@@ -80,6 +80,7 @@ func TestFinancialData_StripStatements(t *testing.T) {
 		FiscalYear:    "2025-03-31",
 		AccountingStd: "jpgaap",
 		Consolidated:  true,
+		SummaryPeriod: "prior1",
 		Summary: Summary{
 			"revenue": &val,
 		},
@@ -108,8 +109,11 @@ func TestFinancialData_StripStatements(t *testing.T) {
 	if fd.Summary["revenue"] == nil || *fd.Summary["revenue"] != val {
 		t.Error("Summary should be preserved after StripStatements")
 	}
+	if fd.SummaryPeriod != "prior1" {
+		t.Errorf("SummaryPeriod = %q, want %q after StripStatements", fd.SummaryPeriod, "prior1")
+	}
 
-	// JSON should contain "statements":null
+	// JSON should contain "statements":null and "summary_period":"prior1"
 	data, err := json.Marshal(fd)
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
@@ -117,5 +121,8 @@ func TestFinancialData_StripStatements(t *testing.T) {
 	jsonStr := string(data)
 	if !strings.Contains(jsonStr, `"statements":null`) {
 		t.Errorf("JSON should contain \"statements\":null, got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"summary_period":"prior1"`) {
+		t.Errorf("JSON should contain \"summary_period\":\"prior1\", got: %s", jsonStr)
 	}
 }

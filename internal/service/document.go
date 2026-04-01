@@ -27,8 +27,9 @@ type ListOptions struct {
 	DocType    string
 	SecCode    string
 	EdinetCode string
-	FilerName  string
-	RateLimit  time.Duration
+	FilerName      string
+	DocDescription string
+	RateLimit      time.Duration
 	Limit      int
 	Reverse    bool
 }
@@ -198,6 +199,9 @@ func filterDocuments(docs []api.Document, opts ListOptions) []DocumentInfo {
 			continue
 		}
 		if opts.FilerName != "" && (doc.FilerName == nil || !strings.Contains(*doc.FilerName, opts.FilerName)) {
+			continue
+		}
+		if opts.DocDescription != "" && (doc.DocDescription == nil || !strings.Contains(*doc.DocDescription, opts.DocDescription)) {
 			continue
 		}
 		result = append(result, ToDocumentInfo(doc))

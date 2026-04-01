@@ -91,6 +91,7 @@ func ListCommands() []CommandInfo {
 				{Name: "--sec-code", Type: "string", Description: "Filter by securities code"},
 				{Name: "--edinet-code", Type: "string", Description: "Filter by EDINET code"},
 				{Name: "--filer-name", Type: "string", Description: "Filter by filer name (substring)"},
+				{Name: "--doc-description", Type: "string", Description: "Filter by document description (substring)"},
 				{Name: "--rate-limit", Type: "int", Default: "100", Description: "Request interval in ms"},
 			},
 			Examples: []string{
