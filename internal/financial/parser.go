@@ -354,12 +354,16 @@ func selectConsolidation(sr *consolidationGroup, st StatementType, opts ParseOpt
 			return nil, false
 		}
 		// Explicit non-consolidated — do not include "other" (IFRS consolidated)
-		if hasNonCons || len(neutralOther) > 0 {
+		if hasNonCons {
 			return nonConsRows, false
 		}
 		if hasCons {
 			*warnings = append(*warnings, fmt.Sprintf("statement %s: non_consolidated data requested but not available, using consolidated as fallback", st))
 			return consRows, true
+		}
+		// Neither consolidated nor non-consolidated, but neutral rows exist
+		if len(neutralOther) > 0 {
+			return nonConsRows, false
 		}
 		return nil, false
 	}

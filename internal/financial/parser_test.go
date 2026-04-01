@@ -968,6 +968,53 @@ func TestParse_NeutralOnlyRows_NonConsolidated(t *testing.T) {
 	}
 }
 
+// --- Consolidated + neutral rows: non-consolidated fallback uses consolidated ---
+
+func TestParse_ConsolidatedPlusNeutral_NonConsolidatedFallback(t *testing.T) {
+	// When consolidated rows + neutral rows exist but NO non-consolidated rows,
+	// and non-consolidated is explicitly requested, it should fallback to
+	// consolidated data (which includes neutral) with a warning.
+	// It should NOT return only neutral rows.
+	nonCons := false
+	file := makeCSVFile(
+		"jpcrp030000-asr-001_E99999-000_2025-03-31_01_2025-06-20.csv",
+		standardHeaders(),
+		[][]string{
+			// Consolidated rows
+			makeRow("jppfs_cor:NetSales", "売上高", "CurrentYearDuration", "当期", "連結", "期間", "JPY", "円", "10000000"),
+			makeRow("jppfs_cor:TotalAssets", "総資産", "CurrentYearInstant", "当期", "連結", "時点", "JPY", "円", "50000000"),
+			// Neutral rows
+			makeRow("jpcrp_cor:NumberOfIssuedSharesAsOfFilingDateTotal", "発行済株式総数", "FilingDateInstant", "当期", "その他", "時点", "shares", "株", "1000000"),
+		},
+	)
+
+	csvResult := &extract.CSVDataResult{Files: []extract.CSVFile{file}}
+	result, err := Parse(csvResult, ParseOpts{Consolidated: &nonCons})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// Should have consolidated fallback with summary keys
+	if result.Summary["revenue"] == nil {
+		t.Error("Summary[revenue] should exist (consolidated fallback), got nil")
+	}
+	if result.Summary["total_assets"] == nil {
+		t.Error("Summary[total_assets] should exist (consolidated fallback), got nil")
+	}
+
+	// Should have a warning about fallback
+	hasWarning := false
+	for _, w := range result.Warnings {
+		if strings.Contains(w, "non_consolidated") && strings.Contains(w, "fallback") {
+			hasWarning = true
+			break
+		}
+	}
+	if !hasWarning {
+		t.Error("expected warning about non_consolidated fallback, got none")
+	}
+}
+
 // --- Helper assertion ---
 
 func assertSummaryValue(t *testing.T, s Summary, key string, want float64) {
