@@ -125,15 +125,16 @@ func (s *FinancialService) GetCompanyFinancials(ctx context.Context, companySvc 
 		From:      from,
 		To:        to,
 		RateLimit: rateLimit,
-		Limit:     0, // fetch all, then take latest N
+		Limit:     periods,
+		Reverse:   true, // scan from newest to oldest, stop once enough found
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Take the latest N filings (results are in ascending date order)
-	if len(filingsResult.Results) > periods {
-		filingsResult.Results = filingsResult.Results[len(filingsResult.Results)-periods:]
+	// Reverse results back to chronological order (oldest first)
+	for i, j := 0, len(filingsResult.Results)-1; i < j; i, j = i+1, j-1 {
+		filingsResult.Results[i], filingsResult.Results[j] = filingsResult.Results[j], filingsResult.Results[i]
 	}
 
 	if len(filingsResult.Results) == 0 {
