@@ -29,6 +29,9 @@ var (
 
 	docTextSection      string
 	docTextListSections bool
+
+	docFinancialStatement      string
+	docFinancialNonConsolidated bool
 )
 
 var downloadTypeMap = map[string]int{
@@ -176,6 +179,40 @@ var docDataCmd = &cobra.Command{
 	},
 }
 
+var docFinancialCmd = &cobra.Command{
+	Use:   "financial <docID>",
+	Short: "Extract structured financial statements from CSV",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		docID := args[0]
+		if !isValidDocID(docID) {
+			return &api.EDINETError{Code: api.ErrValidation, Message: fmt.Sprintf("invalid docID %q: must match S followed by digits (e.g. S100ABCD)", docID)}
+		}
+		if err := validateStatement(docFinancialStatement); err != nil {
+			return err
+		}
+		if app.Config.SubscriptionKey == "" {
+			return &api.EDINETError{Code: api.ErrAuth, Message: "EDINET_API_KEY environment variable is required"}
+		}
+
+		client := api.NewClient(app.Config.SubscriptionKey, "https://api.edinet-fsa.go.jp", app.Config.Debug)
+		svc := service.NewFinancialService(client, app.Cache)
+
+		opts := service.StatementOpts{
+			Statement: docFinancialStatement,
+		}
+		if docFinancialNonConsolidated {
+			opts.Consolidated = ptrBool(false)
+		}
+
+		result, err := svc.GetStatements(cmd.Context(), docID, opts)
+		if err != nil {
+			return err
+		}
+		return outputResult(cmd.OutOrStdout(), result)
+	},
+}
+
 var docTextCmd = &cobra.Command{
 	Use:   "text [docID]",
 	Short: "Extract text from document HTML (best-effort)",
@@ -311,9 +348,13 @@ func init() {
 	docTextCmd.Flags().StringVar(&docTextSection, "section", "", "Section ID or heading pattern")
 	docTextCmd.Flags().BoolVar(&docTextListSections, "list-sections", false, "List available sections")
 
+	docFinancialCmd.Flags().StringVar(&docFinancialStatement, "statement", "all", "Statement type: bs, pl, cf, all")
+	docFinancialCmd.Flags().BoolVar(&docFinancialNonConsolidated, "non-consolidated", false, "Prefer non-consolidated statements")
+
 	docCmd.AddCommand(docListCmd)
 	docCmd.AddCommand(docGetCmd)
 	docCmd.AddCommand(docDataCmd)
 	docCmd.AddCommand(docTextCmd)
+	docCmd.AddCommand(docFinancialCmd)
 	rootCmd.AddCommand(docCmd)
 }

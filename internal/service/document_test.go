@@ -199,3 +199,44 @@ func TestDocumentService_List_ProgressOutput(t *testing.T) {
 		t.Error("expected progress output on stderr, got none")
 	}
 }
+
+func TestDocumentService_List_Reverse(t *testing.T) {
+	// 3-day range, 1 result per day. Reverse=true + Limit=2 should:
+	// - Start from the latest date (2025-06-20)
+	// - Return the 2 most recent results
+	// - Stop early (not call all 3 days)
+	var requestedDates []string
+	client, _ := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		date := r.URL.Query().Get("date")
+		requestedDates = append(requestedDates, date)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"metadata":{"status":"200","message":"OK","parameter":{"date":"` + date + `","type":"2"},"resultset":{"count":1},"processDateTime":"2025-06-20 13:01"},"results":[{"seqNumber":1,"docID":"D` + date + `","edinetCode":null,"secCode":null,"JCN":null,"filerName":null,"fundCode":null,"ordinanceCode":null,"formCode":null,"docTypeCode":"120","periodStart":null,"periodEnd":null,"submitDateTime":null,"docDescription":null,"issuerEdinetCode":null,"subjectEdinetCode":null,"subsidiaryEdinetCode":null,"currentReportReason":null,"parentDocID":null,"opeDateTime":null,"withdrawalStatus":"0","docInfoEditStatus":"0","disclosureStatus":"0","xbrlFlag":"0","pdfFlag":"0","attachDocFlag":"0","englishDocFlag":"0","csvFlag":"0","legalStatus":"1"}]}`))
+	})
+
+	svc := NewDocumentService(client, cache.NoopCache{}, nil)
+	result, err := svc.List(context.Background(), ListOptions{
+		From:      "2025-06-18",
+		To:        "2025-06-20",
+		RateLimit: time.Millisecond,
+		Limit:     2,
+		Reverse:   true,
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	// Should have 2 results
+	if len(result.Results) != 2 {
+		t.Errorf("len(Results) = %d, want 2", len(result.Results))
+	}
+
+	// Should have started from the latest date
+	if len(requestedDates) > 0 && requestedDates[0] != "2025-06-20" {
+		t.Errorf("first requested date = %q, want %q", requestedDates[0], "2025-06-20")
+	}
+
+	// Should stop early — not call all 3 days
+	if len(requestedDates) > 2 {
+		t.Errorf("requested %d dates, want <=2 (should stop early)", len(requestedDates))
+	}
+}

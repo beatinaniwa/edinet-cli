@@ -35,6 +35,60 @@ func TestSchemaSections_OutputIsJSON(t *testing.T) {
 	}
 }
 
+func TestSchemaFinancialElements_OutputIsJSON(t *testing.T) {
+	stdout, _, code := executeCommand("schema", "financial-elements")
+	if code != 0 {
+		t.Fatalf("schema financial-elements exit code = %d, want 0", code)
+	}
+	if !json.Valid([]byte(stdout)) {
+		t.Errorf("output is not valid JSON: %q", stdout[:min(100, len(stdout))])
+	}
+	// Verify it's an array
+	var elems []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &elems); err != nil {
+		t.Fatalf("failed to parse output as array: %v", err)
+	}
+	if len(elems) == 0 {
+		t.Error("expected non-empty elements array")
+	}
+}
+
+func TestSchemaCommands_ContainsDocFinancial(t *testing.T) {
+	stdout, _, _ := executeCommand("schema", "commands")
+	var cmds []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &cmds); err != nil {
+		t.Fatalf("failed to parse output: %v", err)
+	}
+	found := false
+	for _, c := range cmds {
+		if c["name"] == "doc financial" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("schema commands output missing 'doc financial'")
+	}
+}
+
+func TestSchemaCommands_ContainsSchemaFinancialElements(t *testing.T) {
+	stdout, _, _ := executeCommand("schema", "commands")
+	var cmds []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &cmds); err != nil {
+		t.Fatalf("failed to parse output: %v", err)
+	}
+	found := false
+	for _, c := range cmds {
+		if c["name"] == "schema financial-elements" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("schema commands output missing 'schema financial-elements'")
+	}
+}
+
 func TestSchemaCommands_ContainsDocList(t *testing.T) {
 	stdout, _, _ := executeCommand("schema", "commands")
 	var cmds []map[string]any

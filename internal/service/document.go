@@ -30,6 +30,7 @@ type ListOptions struct {
 	FilerName  string
 	RateLimit  time.Duration
 	Limit      int
+	Reverse    bool
 }
 
 // NewDocumentService creates a new DocumentService.
@@ -65,6 +66,12 @@ func (s *DocumentService) listDateRange(ctx context.Context, opts ListOptions) (
 	dates, err := dateRange(opts.From, opts.To)
 	if err != nil {
 		return nil, err
+	}
+
+	if opts.Reverse {
+		for i, j := 0, len(dates)-1; i < j; i, j = i+1, j-1 {
+			dates[i], dates[j] = dates[j], dates[i]
+		}
 	}
 
 	var allResults []DocumentInfo

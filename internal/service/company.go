@@ -28,6 +28,7 @@ type FilingsOptions struct {
 	To        string
 	RateLimit time.Duration
 	Limit     int
+	Reverse   bool
 }
 
 // NewCompanyService creates a new CompanyService.
@@ -79,6 +80,7 @@ func (s *CompanyService) Filings(ctx context.Context, code string, opts FilingsO
 		DocType:    opts.DocType,
 		RateLimit:  opts.RateLimit,
 		Limit:      opts.Limit,
+		Reverse:    opts.Reverse,
 	})
 }
 

@@ -40,7 +40,7 @@ func TestListCommands_HasAllTopLevel(t *testing.T) {
 		t.Fatal("ListCommands() returned empty")
 	}
 
-	wantNames := []string{"doc list", "doc get", "doc data", "doc text", "company search", "company filings", "company update", "schema commands", "schema doc-types", "schema sections"}
+	wantNames := []string{"doc list", "doc get", "doc data", "doc text", "doc financial", "company search", "company filings", "company financials", "company update", "schema commands", "schema doc-types", "schema sections", "schema financial-elements"}
 	cmdMap := map[string]bool{}
 	for _, c := range cmds {
 		cmdMap[c.Name] = true

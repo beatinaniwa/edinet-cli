@@ -129,6 +129,19 @@ func ListCommands() []CommandInfo {
 			},
 		},
 		{
+			Name:        "doc financial",
+			Description: "Extract structured financial statements from CSV",
+			Flags: []FlagInfo{
+				{Name: "--statement", Type: "string", Default: "all", Description: "Statement type: bs, pl, cf, all"},
+				{Name: "--non-consolidated", Type: "bool", Description: "Prefer non-consolidated statements"},
+			},
+			Examples: []string{
+				"edinet doc financial S100ABCD",
+				"edinet doc financial S100ABCD --statement pl",
+				"edinet doc financial S100ABCD --non-consolidated",
+			},
+		},
+		{
 			Name:        "company search",
 			Description: "Search for companies by name, code, or industry",
 			Flags: []FlagInfo{
@@ -151,6 +164,20 @@ func ListCommands() []CommandInfo {
 			Examples: []string{"edinet company filings 7203 --doc-type 120 --limit 5"},
 		},
 		{
+			Name:        "company financials",
+			Description: "Extract financial statements for multiple fiscal periods",
+			Flags: []FlagInfo{
+				{Name: "--periods", Type: "int", Default: "3", Description: "Number of fiscal periods (1-10)"},
+				{Name: "--statement", Type: "string", Default: "all", Description: "Statement type: bs, pl, cf, all"},
+				{Name: "--non-consolidated", Type: "bool", Description: "Prefer non-consolidated statements"},
+			},
+			Examples: []string{
+				"edinet company financials E02144",
+				"edinet company financials 7203 --periods 5",
+				"edinet company financials トヨタ --statement pl",
+			},
+		},
+		{
 			Name:        "company update",
 			Description: "Download and update the EDINET code list",
 			Examples:    []string{"edinet company update"},
@@ -166,6 +193,10 @@ func ListCommands() []CommandInfo {
 		{
 			Name:        "schema sections",
 			Description: "List known sections for text extraction",
+		},
+		{
+			Name:        "schema financial-elements",
+			Description: "List all known financial XBRL element mappings",
 		},
 	}
 }
