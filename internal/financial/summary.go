@@ -80,9 +80,11 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 		bestPeriod = periods[0]
 	}
 
-	// Phase 3: extract summary items from bestPeriod first, then filing_date.
+	// Phase 3: extract summary items from bestPeriod, then supplement from filing_date.
 	// bestPeriod is processed first so non-additive keys follow first-wins rule.
-	extractPeriod := func(target string) {
+	// Additive keys (e.g. interest_bearing_debt) are only accumulated within
+	// bestPeriod to avoid mixing debt snapshots from different points in time.
+	extractItems := func(target string, allowAdditive bool) {
 		for _, stmt := range statements {
 			for _, pd := range stmt.Periods {
 				if pd.Period != target {
@@ -93,6 +95,9 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 						continue
 					}
 					if additiveKeys[item.SummaryKey] {
+						if !allowAdditive {
+							continue
+						}
 						existing := summary[item.SummaryKey]
 						if existing == nil {
 							v := *item.Value
@@ -113,9 +118,9 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 	}
 
 	if bestPeriod != "" {
-		extractPeriod(bestPeriod)
+		extractItems(bestPeriod, true)
 	}
-	extractPeriod("filing_date")
+	extractItems("filing_date", false) // supplemental only, no additive accumulation
 
 	return bestPeriod
 }
