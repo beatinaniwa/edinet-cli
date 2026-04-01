@@ -54,3 +54,44 @@ func TestCompanyFilings_HelpOutput(t *testing.T) {
 		t.Error("expected help output")
 	}
 }
+
+func TestCompanyFinancials_NoArgs(t *testing.T) {
+	_, _, code := executeCommand("company", "financials")
+	if code == 0 {
+		t.Error("expected non-zero exit code when no code provided")
+	}
+}
+
+func TestCompanyFinancials_PeriodsZero(t *testing.T) {
+	_, stderr, code := executeCommand("company", "financials", "E02144", "--periods", "0")
+	if code == 0 {
+		t.Error("expected non-zero exit code for --periods 0")
+	}
+	expectErrorCode(t, stderr, "VALIDATION_ERROR")
+}
+
+func TestCompanyFinancials_PeriodsTooHigh(t *testing.T) {
+	_, stderr, code := executeCommand("company", "financials", "E02144", "--periods", "11")
+	if code == 0 {
+		t.Error("expected non-zero exit code for --periods 11")
+	}
+	expectErrorCode(t, stderr, "VALIDATION_ERROR")
+}
+
+func TestCompanyFinancials_InvalidStatement(t *testing.T) {
+	_, stderr, code := executeCommand("company", "financials", "E02144", "--statement", "invalid")
+	if code == 0 {
+		t.Error("expected non-zero exit code for invalid --statement")
+	}
+	expectErrorCode(t, stderr, "VALIDATION_ERROR")
+}
+
+func TestCompanyFinancials_HelpOutput(t *testing.T) {
+	stdout, _, code := executeCommand("company", "financials", "--help")
+	if code != 0 {
+		t.Error("company financials --help should succeed")
+	}
+	if stdout == "" {
+		t.Error("expected help output")
+	}
+}

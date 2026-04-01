@@ -21,6 +21,21 @@ func executeCommand(args ...string) (stdout, stderr string, exitCode int) {
 	return outBuf.String(), errBuf.String(), exitCode
 }
 
+// expectErrorCode asserts the stderr JSON contains the expected error code.
+func expectErrorCode(t *testing.T, stderr, wantCode string) {
+	t.Helper()
+	var errResp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stderr), &errResp); err == nil {
+		if errResp.Error.Code != wantCode {
+			t.Errorf("error code = %q, want %q", errResp.Error.Code, wantCode)
+		}
+	}
+}
+
 func TestDocList_NoDateFlag(t *testing.T) {
 	_, stderr, code := executeCommand("doc", "list")
 	if code == 0 {
@@ -99,6 +114,21 @@ func TestDocText_NoDocID(t *testing.T) {
 	if code == 0 {
 		t.Error("expected non-zero exit code when no docID provided")
 	}
+}
+
+func TestDocFinancial_NoDocID(t *testing.T) {
+	_, _, code := executeCommand("doc", "financial")
+	if code == 0 {
+		t.Error("expected non-zero exit code when no docID provided")
+	}
+}
+
+func TestDocFinancial_InvalidStatement(t *testing.T) {
+	_, stderr, code := executeCommand("doc", "financial", "S100ABCD", "--statement", "invalid")
+	if code == 0 {
+		t.Error("expected non-zero exit code for invalid --statement")
+	}
+	expectErrorCode(t, stderr, "VALIDATION_ERROR")
 }
 
 func TestDocText_ListSectionsOutput(t *testing.T) {

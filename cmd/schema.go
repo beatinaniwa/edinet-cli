@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/beatinaniwa/edinet-cli/internal/financial"
 	"github.com/beatinaniwa/edinet-cli/internal/schema"
 	"github.com/spf13/cobra"
 )
@@ -34,9 +35,18 @@ var schemaSectionsCmd = &cobra.Command{
 	},
 }
 
+var schemaFinancialElementsCmd = &cobra.Command{
+	Use:   "financial-elements",
+	Short: "List all known financial XBRL element mappings",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return outputResult(cmd.OutOrStdout(), financial.Elements())
+	},
+}
+
 func init() {
 	schemaCmd.AddCommand(schemaCommandsCmd)
 	schemaCmd.AddCommand(schemaDocTypesCmd)
 	schemaCmd.AddCommand(schemaSectionsCmd)
+	schemaCmd.AddCommand(schemaFinancialElementsCmd)
 	rootCmd.AddCommand(schemaCmd)
 }

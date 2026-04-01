@@ -71,6 +71,22 @@ func renderMapTable(w io.Writer, rows []map[string]any) error {
 	return nil
 }
 
+// validStatements defines accepted --statement flag values.
+var validStatements = map[string]bool{
+	"bs": true, "pl": true, "cf": true, "all": true,
+}
+
+// validateStatement checks that stmt is a valid statement type.
+func validateStatement(stmt string) error {
+	if !validStatements[stmt] {
+		return &api.EDINETError{Code: api.ErrValidation, Message: fmt.Sprintf("invalid --statement %q, must be one of: bs, pl, cf, all", stmt)}
+	}
+	return nil
+}
+
+// ptrBool returns a pointer to b. Used for optional *bool flags.
+func ptrBool(b bool) *bool { return &b }
+
 // exitError writes a structured error to w and returns the appropriate exit code.
 func exitError(w io.Writer, err error) int {
 	if edinetErr, ok := err.(*api.EDINETError); ok {

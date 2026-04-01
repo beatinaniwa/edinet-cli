@@ -21,6 +21,10 @@ var (
 	companyFilingsTo      string
 	companyFilingsLimit   int
 	companySearchIndustry string
+
+	companyFinancialsPeriods          int
+	companyFinancialsStatement        string
+	companyFinancialsNonConsolidated  bool
 )
 
 const (
@@ -117,6 +121,57 @@ var companyFilingsCmd = &cobra.Command{
 			return err
 		}
 
+		return outputResult(cmd.OutOrStdout(), result)
+	},
+}
+
+var companyFinancialsCmd = &cobra.Command{
+	Use:   "financials <code>",
+	Short: "Extract financial statements for multiple fiscal periods",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		code := args[0]
+
+		if companyFinancialsPeriods < 1 || companyFinancialsPeriods > 10 {
+			return &api.EDINETError{Code: api.ErrValidation, Message: fmt.Sprintf("--periods must be between 1 and 10, got %d", companyFinancialsPeriods)}
+		}
+		if err := validateStatement(companyFinancialsStatement); err != nil {
+			return err
+		}
+		if app.Config.SubscriptionKey == "" {
+			return &api.EDINETError{Code: api.ErrAuth, Message: "EDINET_API_KEY environment variable is required"}
+		}
+
+		client := api.NewClient(app.Config.SubscriptionKey, "https://api.edinet-fsa.go.jp", app.Config.Debug)
+		docSvc := service.NewDocumentService(client, app.Cache, cmd.ErrOrStderr())
+		finSvc := service.NewFinancialService(client, app.Cache)
+
+		var reg *company.Registry
+		if !isEdinetCode(code) {
+			var err error
+			reg, err = loadRegistry()
+			if err != nil {
+				return err
+			}
+		}
+
+		companySvc := service.NewCompanyService(reg, docSvc)
+
+		opts := service.CompanyFinancialsOpts{
+			StatementOpts: service.StatementOpts{
+				Statement: companyFinancialsStatement,
+			},
+			Periods:   companyFinancialsPeriods,
+			RateLimit: 100 * time.Millisecond,
+		}
+		if companyFinancialsNonConsolidated {
+			opts.Consolidated = ptrBool(false)
+		}
+
+		result, err := finSvc.GetCompanyFinancials(cmd.Context(), companySvc, code, opts)
+		if err != nil {
+			return err
+		}
 		return outputResult(cmd.OutOrStdout(), result)
 	},
 }
@@ -228,8 +283,13 @@ func init() {
 	companyFilingsCmd.Flags().StringVar(&companyFilingsTo, "to", "", "Range end date (default: today)")
 	companyFilingsCmd.Flags().IntVar(&companyFilingsLimit, "limit", 0, "Maximum number of results (0=unlimited)")
 
+	companyFinancialsCmd.Flags().IntVar(&companyFinancialsPeriods, "periods", 3, "Number of fiscal periods (1-10)")
+	companyFinancialsCmd.Flags().StringVar(&companyFinancialsStatement, "statement", "all", "Statement type: bs, pl, cf, all")
+	companyFinancialsCmd.Flags().BoolVar(&companyFinancialsNonConsolidated, "non-consolidated", false, "Prefer non-consolidated statements")
+
 	companyCmd.AddCommand(companySearchCmd)
 	companyCmd.AddCommand(companyFilingsCmd)
+	companyCmd.AddCommand(companyFinancialsCmd)
 	companyCmd.AddCommand(companyUpdateCmd)
 	rootCmd.AddCommand(companyCmd)
 }
