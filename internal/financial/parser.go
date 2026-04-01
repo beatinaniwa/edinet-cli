@@ -317,14 +317,22 @@ func buildResult(rows []parsedRow, opts ParseOpts, warnings []string) (*ParseRes
 
 // selectConsolidation chooses which set of rows to use for a statement type.
 func selectConsolidation(sr *consolidationGroup, st StatementType, opts ParseOpts, warnings *[]string) ([]parsedRow, bool) {
-	// "other" rows (連結・個別=その他) are IFRS consolidated data, so include
-	// them with consolidated but NOT with explicit non-consolidated.
-	consRows := append(sr.consolidated, sr.other...)
-	nonConsRows := sr.nonConsolidated // exclude "other" — it is IFRS consolidated
+	// Split "other" rows into neutral (jpcrp_cor/jpdei_cor — applies to both modes)
+	// and IFRS-consolidated (jpigp_cor, company-specific — consolidated only).
+	var neutralOther, ifrsOther []parsedRow
+	for _, r := range sr.other {
+		prefix := elementPrefix(r.elementID)
+		if prefix == "jpcrp_cor" || prefix == "jpdei_cor" {
+			neutralOther = append(neutralOther, r)
+		} else {
+			ifrsOther = append(ifrsOther, r)
+		}
+	}
 
-	// IFRS consolidated data comes through as "other" (連結・個別=その他),
-	// so include "other" rows when checking for consolidated availability.
-	hasCons := len(sr.consolidated) > 0 || len(sr.other) > 0
+	consRows := append(append(sr.consolidated, ifrsOther...), neutralOther...)
+	nonConsRows := append(sr.nonConsolidated, neutralOther...) // include neutral, exclude IFRS consolidated
+
+	hasCons := len(sr.consolidated) > 0 || len(ifrsOther) > 0
 	hasNonCons := len(sr.nonConsolidated) > 0
 
 	if opts.Consolidated != nil {
