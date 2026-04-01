@@ -126,8 +126,10 @@ func populateSummary(summary Summary, statements []FinancialStatement) string {
 
 	if bestPeriod != "" {
 		extractItems(bestPeriod, true)
+		extractItems("filing_date", false) // supplement only, no additive accumulation
+	} else {
+		extractItems("filing_date", true) // filing_date is the primary source
 	}
-	extractItems("filing_date", false)
 
 	return bestPeriod
 }
