@@ -899,6 +899,46 @@ func TestParse_PriorPeriodIncluded(t *testing.T) {
 	}
 }
 
+// --- AccountingStd computed from selected rows only ---
+
+func TestParse_AccountingStdFromSelectedRows(t *testing.T) {
+	// Mixed filing: consolidated IFRS rows + non-consolidated JP-GAAP rows.
+	// When requesting non-consolidated, AccountingStd should be "jpgaap"
+	// because only JP-GAAP rows are selected.
+	nonCons := false
+	file := makeCSVFile(
+		"jpcrp030000-asr-001_E99999-000_2025-03-31_01_2025-06-20.csv",
+		standardHeaders(),
+		[][]string{
+			// Consolidated IFRS rows (should be excluded when non-consolidated is requested)
+			makeRow("jpigp_cor:RevenueIFRS", "売上収益", "CurrentYearDuration", "当期", "連結", "期間", "JPY", "円", "5000000"),
+			makeRow("jpigp_cor:AssetsIFRS", "資産合計", "CurrentYearInstant", "当期", "連結", "時点", "JPY", "円", "10000000"),
+			makeRow("jpigp_cor:OperatingProfitLossIFRS", "営業利益", "CurrentYearDuration", "当期", "連結", "期間", "JPY", "円", "1000000"),
+			// Non-consolidated JP-GAAP rows
+			makeRow("jppfs_cor:NetSales", "売上高", "CurrentYearDuration", "当期", "個別", "期間", "JPY", "円", "3000000"),
+			makeRow("jppfs_cor:TotalAssets", "総資産", "CurrentYearInstant", "当期", "個別", "時点", "JPY", "円", "8000000"),
+		},
+	)
+
+	csvResult := &extract.CSVDataResult{Files: []extract.CSVFile{file}}
+	result, err := Parse(csvResult, ParseOpts{Consolidated: &nonCons})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// Result-level AccountingStd should reflect the selected (non-consolidated) rows
+	if result.AccountingStd != "jpgaap" {
+		t.Errorf("AccountingStd = %q, want %q", result.AccountingStd, "jpgaap")
+	}
+
+	// Each statement should also have jpgaap
+	for _, stmt := range result.Statements {
+		if stmt.AccountingStd != "jpgaap" {
+			t.Errorf("statement %q AccountingStd = %q, want %q", stmt.Type, stmt.AccountingStd, "jpgaap")
+		}
+	}
+}
+
 // --- Helper assertion ---
 
 func assertSummaryValue(t *testing.T, s Summary, key string, want float64) {

@@ -288,8 +288,12 @@ func buildResult(rows []parsedRow, opts ParseOpts, warnings []string) (*ParseRes
 		}
 	}
 
-	// Detect accounting standard
-	acctStd := detectAccountingStandard(rows)
+	// Detect accounting standard from selected rows only
+	var selectedRows []parsedRow
+	for _, sel := range selections {
+		selectedRows = append(selectedRows, sel.rows...)
+	}
+	acctStd := detectAccountingStandard(selectedRows)
 
 	// Build statements
 	summary := make(Summary)
