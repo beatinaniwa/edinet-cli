@@ -222,7 +222,9 @@ func init() {
 		"jppfs_cor:IncomeTaxes":                           {StmtPL, "tax", 1130, false, "", "Income taxes - current"},
 		"jppfs_cor:IncomeTaxesDeferred":                   {StmtPL, "tax", 1131, false, "", "Income taxes - deferred"},
 		"jppfs_cor:NetIncome":                             {StmtPL, "net_income", 1150, true, "net_income", "Net income"},
+		"jppfs_cor:ProfitLoss":                            {StmtPL, "net_income", 1150, true, "net_income", "Profit/loss"},
 		"jppfs_cor:NetIncomeAttributableToOwnersOfParent": {StmtPL, "net_income", 1151, true, "net_income", "Net income attributable to owners of parent"},
+		"jppfs_cor:ProfitLossAttributableToOwnersOfParent": {StmtPL, "net_income", 1151, true, "net_income", "Profit/loss attributable to owners of parent"},
 		"jppfs_cor:NetIncomeAttributableToNonControllingInterests": {StmtPL, "net_income", 1152, false, "", "Net income attributable to non-controlling interests"},
 
 		// ============================================================
@@ -244,6 +246,7 @@ func init() {
 		"jpcrp_cor:ResearchAndDevelopmentExpensesTotal":      {StmtPL, "other_pl", 3100, false, "research_and_development", "R&D expenses"},
 		"jpcrp_cor:DividendPaidPerShareSummaryOfBusinessResults": {StmtPL, "dividends", 3200, false, "dividend_per_share", "Dividend per share"},
 		"jpcrp_cor:BasicEarningsLossPerShare":                {StmtPL, "eps", 3210, false, "eps", "Basic EPS"},
+		"jpcrp_cor:BasicEarningsLossPerShareSummaryOfBusinessResults": {StmtPL, "eps", 3211, false, "eps", "Basic EPS (summary)"},
 		"jpcrp_cor:DilutedEarningsLossPerShare":              {StmtPL, "eps", 3220, false, "", "Diluted EPS"},
 
 		// ============================================================
@@ -259,6 +262,31 @@ func init() {
 		"jppfs_cor:DeferredTaxAssets":                      {StmtBS, "current_assets", 141, false, "", "Deferred tax assets (current)"},
 		"jppfs_cor:DeferredTaxAssetsNCA":                   {StmtBS, "noncurrent_assets", 251, false, "", "Deferred tax assets (non-current)"},
 		"jppfs_cor:ResearchAndDevelopmentExpenses":         {StmtPL, "other_pl", 3101, false, "research_and_development", "R&D expenses"},
+
+		// ============================================================
+		// SummaryOfBusinessResults fallback elements (jpcrp_cor:)
+		// These have higher SortOrder than main statement elements so
+		// populateSummary's "first wins" rule prefers detailed values.
+		// ============================================================
+
+		// JP-GAAP SummaryOfBusinessResults
+		"jpcrp_cor:NetSalesSummaryOfBusinessResults":            {StmtPL, "revenue", 1008, true, "revenue", "Net sales (summary)"},
+		"jpcrp_cor:OperatingIncomeSummaryOfBusinessResults":     {StmtPL, "operating_income", 1068, true, "operating_income", "Operating income (summary)"},
+		"jpcrp_cor:OrdinaryIncomeSummaryOfBusinessResults":      {StmtPL, "ordinary_income", 1098, true, "ordinary_income", "Ordinary income (summary)"},
+		"jpcrp_cor:NetIncomeSummaryOfBusinessResults":           {StmtPL, "net_income", 1158, true, "net_income", "Net income (summary)"},
+		"jpcrp_cor:ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults": {StmtPL, "net_income", 1159, true, "net_income", "Net income attributable to parent (summary)"},
+		"jpcrp_cor:TotalAssetsSummaryOfBusinessResults":         {StmtBS, "total", 308, true, "total_assets", "Total assets (summary)"},
+		"jpcrp_cor:NetAssetsSummaryOfBusinessResults":           {StmtBS, "equity", 808, true, "net_assets", "Net assets (summary)"},
+
+		// IFRS SummaryOfBusinessResults
+		"jpcrp_cor:RevenueIFRSSummaryOfBusinessResults":         {StmtPL, "revenue", 1008, true, "revenue", "Revenue IFRS (summary)"},
+		"jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults": {StmtPL, "net_income", 1138, true, "net_income", "Net income IFRS (summary)"},
+
+		// US GAAP SummaryOfBusinessResults
+		"jpcrp_cor:RevenuesUSGAAPSummaryOfBusinessResults":      {StmtPL, "revenue", 1008, true, "revenue", "Revenue US GAAP (summary)"},
+		"jpcrp_cor:NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults": {StmtPL, "net_income", 1158, true, "net_income", "Net income US GAAP (summary)"},
+		"jpcrp_cor:TotalAssetsUSGAAPSummaryOfBusinessResults":   {StmtBS, "total", 308, true, "total_assets", "Total assets US GAAP (summary)"},
+		"jpcrp_cor:EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults": {StmtBS, "equity", 808, true, "net_assets", "Equity US GAAP (summary)"},
 	}
 
 	// Company-specific suffix mappings for jpcrp030000-asr_* elements.
@@ -270,6 +298,14 @@ func init() {
 		"OperatingProfitLossIFRS":                        {StmtPL, "operating_income", 1061, true, "operating_income", "Operating profit/loss (company-specific IFRS)"},
 		"RevenueIFRS":                                    {StmtPL, "revenue", 1005, true, "revenue", "Revenue (company-specific IFRS)"},
 		"NetSales":                                       {StmtPL, "revenue", 1006, true, "revenue", "Net sales (company-specific)"},
+
+		// Company-specific revenue variants (e.g., Sony's financial services revenue)
+		// SortOrder: company-specific (1007) before SummaryOfBusinessResults (1008),
+		// and KeyFinancialData variants at same level (1007) to match precedence.
+		"SalesAndFinancialServicesRevenueIFRS":            {StmtPL, "revenue", 1007, true, "revenue", "Sales and financial services revenue (IFRS)"},
+		"SalesAndFinancialServicesRevenueIFRSKeyFinancialData": {StmtPL, "revenue", 1007, true, "revenue", "Sales and financial services revenue (IFRS, key financial data)"},
+		"OperatingProfitLossIFRSKeyFinancialData":         {StmtPL, "operating_income", 1067, true, "operating_income", "Operating profit/loss (IFRS, key financial data)"},
+		"NetSalesKeyFinancialData":                        {StmtPL, "revenue", 1007, true, "revenue", "Net sales (key financial data)"},
 	}
 }
 
@@ -294,8 +330,7 @@ func Classify(elementID string, pointType string) ElementClassification {
 
 	// 2. Check company-specific elements (jpcrp030000-asr_*)
 	if strings.HasPrefix(elementID, "jpcrp030000-asr_") {
-		if colonIdx := strings.Index(elementID, ":"); colonIdx >= 0 {
-			suffix := elementID[colonIdx+1:]
+		if suffix := elementLocalName(elementID); suffix != elementID {
 			if def, ok := companySuffixes[suffix]; ok {
 				return ElementClassification{
 					Statement:  def.statement,
@@ -315,11 +350,7 @@ func Classify(elementID string, pointType string) ElementClassification {
 // classifyByKeyword uses keyword matching and pointType to classify unknown elements.
 // Only positive matches are returned; no fallback to PL or BS.
 func classifyByKeyword(elementID string, pointType string) ElementClassification {
-	// Extract the local name (after the colon) for keyword matching
-	localName := elementID
-	if colonIdx := strings.Index(elementID, ":"); colonIdx >= 0 {
-		localName = elementID[colonIdx+1:]
-	}
+	localName := elementLocalName(elementID)
 	upper := strings.ToUpper(localName)
 
 	// CF keywords — must be duration

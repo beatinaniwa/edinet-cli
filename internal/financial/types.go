@@ -1,7 +1,9 @@
 package financial
 
-// Summary holds key financial figures extracted from the current period.
-// Keys are standardized English names (e.g., "revenue", "total_assets").
+// Summary holds key financial figures for the current period.
+// Keys include both extracted values (e.g., "revenue", "total_assets") from financial
+// statements and derived metrics (e.g., "roe", "operating_margin") calculated from them.
+// Use schema derived-metrics to discover which keys are derived and their formulas.
 // nil values indicate the item was not found or not applicable.
 type Summary map[string]*float64
 
@@ -55,6 +57,12 @@ type CompanyInfo struct {
 	EdinetCode string `json:"edinet_code"`
 	SecCode    string `json:"sec_code,omitempty"`
 	Name       string `json:"name,omitempty"`
+}
+
+// StripStatements removes detailed statement data, keeping only summary and metadata.
+// After stripping, JSON output will contain "statements": null.
+func (d *FinancialData) StripStatements() {
+	d.Statements = nil
 }
 
 // FinancialData is the final output of the service layer with document metadata.

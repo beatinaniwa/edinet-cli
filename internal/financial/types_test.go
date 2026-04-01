@@ -2,6 +2,7 @@ package financial
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -69,5 +70,52 @@ func TestFinancialData_JSONOutput(t *testing.T) {
 	}
 	if !json.Valid(data) {
 		t.Error("output is not valid JSON")
+	}
+}
+
+func TestFinancialData_StripStatements(t *testing.T) {
+	val := 1000.0
+	fd := FinancialData{
+		DocID:         "S100TEST",
+		FiscalYear:    "2025-03-31",
+		AccountingStd: "jpgaap",
+		Consolidated:  true,
+		Summary: Summary{
+			"revenue": &val,
+		},
+		Statements: []FinancialStatement{
+			{Type: "pl", Consolidated: true},
+		},
+	}
+
+	fd.StripStatements()
+
+	// Statements should be nil
+	if fd.Statements != nil {
+		t.Errorf("Statements should be nil after StripStatements, got %v", fd.Statements)
+	}
+
+	// Metadata should be preserved
+	if fd.DocID != "S100TEST" {
+		t.Errorf("DocID = %q, want %q", fd.DocID, "S100TEST")
+	}
+	if fd.FiscalYear != "2025-03-31" {
+		t.Errorf("FiscalYear = %q, want %q", fd.FiscalYear, "2025-03-31")
+	}
+	if fd.AccountingStd != "jpgaap" {
+		t.Errorf("AccountingStd = %q, want %q", fd.AccountingStd, "jpgaap")
+	}
+	if fd.Summary["revenue"] == nil || *fd.Summary["revenue"] != val {
+		t.Error("Summary should be preserved after StripStatements")
+	}
+
+	// JSON should contain "statements":null
+	data, err := json.Marshal(fd)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	jsonStr := string(data)
+	if !strings.Contains(jsonStr, `"statements":null`) {
+		t.Errorf("JSON should contain \"statements\":null, got: %s", jsonStr)
 	}
 }

@@ -29,6 +29,8 @@ func makeRow(elementID, label, contextID, relYear, consolidated, pointType, unit
 	return []string{elementID, label, contextID, relYear, consolidated, pointType, unitID, unit, value}
 }
 
+func ptrFloat(v float64) *float64 { return &v }
+
 // findSummaryKey returns the summary value for a key, or nil if not present.
 func findSummaryKey(s Summary, key string) *float64 {
 	if s == nil {
@@ -1026,5 +1028,129 @@ func assertSummaryValue(t *testing.T, s Summary, key string, want float64) {
 	}
 	if math.Abs(*v-want) > 0.001 {
 		t.Errorf("Summary[%q] = %v, want %v", key, *v, want)
+	}
+}
+
+// --- SummaryOfBusinessResults precedence tests ---
+
+func TestParse_SummaryPrecedence_DetailedWinsOverFallback(t *testing.T) {
+	// When both detailed (jppfs_cor) and SummaryOfBusinessResults (jpcrp_cor) rows exist,
+	// the detailed value should win because it has lower SortOrder.
+	file := makeCSVFile(
+		"jpcrp030000-asr-001_E02367-000_2025-03-31_01_2025-06-20.csv",
+		standardHeaders(),
+		[][]string{
+			// Detailed revenue (SortOrder 1000, should win)
+			makeRow("jppfs_cor:NetSales", "売上高", "CurrentYearDuration", "当期", "連結", "期間", "JPY", "円", "1000000000000"),
+			// SummaryOfBusinessResults revenue (SortOrder 1008, should be ignored)
+			makeRow("jpcrp_cor:NetSalesSummaryOfBusinessResults", "売上高、経営指標等", "CurrentYearDuration", "当期", "", "期間", "JPY", "円", "9999999999999"),
+			// Operating income (only from summary — should be used as fallback)
+			makeRow("jpcrp_cor:OperatingIncomeSummaryOfBusinessResults", "営業利益、経営指標等", "CurrentYearDuration", "当期", "", "期間", "JPY", "円", "200000000000"),
+		},
+	)
+
+	result, err := Parse(&extract.CSVDataResult{Files: []extract.CSVFile{file}}, ParseOpts{})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// Detailed value wins for revenue
+	assertSummaryValue(t, result.Summary, "revenue", 1000000000000)
+	// Fallback used for operating income (no detailed row)
+	assertSummaryValue(t, result.Summary, "operating_income", 200000000000)
+}
+
+func TestParse_SummaryFallback_UsedWhenDetailedMissing(t *testing.T) {
+	// When only SummaryOfBusinessResults rows exist, they should populate summary.
+	file := makeCSVFile(
+		"jpcrp030000-asr-001_E02367-000_2025-03-31_01_2025-06-20.csv",
+		standardHeaders(),
+		[][]string{
+			makeRow("jpcrp_cor:TotalAssetsSummaryOfBusinessResults", "総資産額、経営指標等", "CurrentYearInstant", "当期", "", "時点", "JPY", "円", "3000000000000"),
+			makeRow("jpcrp_cor:NetAssetsSummaryOfBusinessResults", "純資産額、経営指標等", "CurrentYearInstant", "当期", "", "時点", "JPY", "円", "2000000000000"),
+			makeRow("jpcrp_cor:NetSalesSummaryOfBusinessResults", "売上高、経営指標等", "CurrentYearDuration", "当期", "", "期間", "JPY", "円", "1500000000000"),
+			makeRow("jpcrp_cor:NetIncomeSummaryOfBusinessResults", "当期純利益、経営指標等", "CurrentYearDuration", "当期", "", "期間", "JPY", "円", "400000000000"),
+		},
+	)
+
+	result, err := Parse(&extract.CSVDataResult{Files: []extract.CSVFile{file}}, ParseOpts{})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	assertSummaryValue(t, result.Summary, "total_assets", 3000000000000)
+	assertSummaryValue(t, result.Summary, "net_assets", 2000000000000)
+	assertSummaryValue(t, result.Summary, "revenue", 1500000000000)
+	assertSummaryValue(t, result.Summary, "net_income", 400000000000)
+}
+
+func TestParse_NonConsolidated_NeutralFallback_EmitsWarning(t *testing.T) {
+	// When explicit non-consolidated is requested but only neutral rows exist,
+	// a warning should be emitted.
+	file := makeCSVFile(
+		"jpcrp030000-asr-001_E02367-000_2025-03-31_01_2025-06-20.csv",
+		standardHeaders(),
+		[][]string{
+			// Only neutral (jpcrp_cor) rows, no actual non-consolidated rows
+			makeRow("jpcrp_cor:NetSalesSummaryOfBusinessResults", "売上高、経営指標等", "CurrentYearDuration", "当期", "", "期間", "JPY", "円", "1000000000000"),
+			makeRow("jpcrp_cor:TotalAssetsSummaryOfBusinessResults", "総資産額、経営指標等", "CurrentYearInstant", "当期", "", "時点", "JPY", "円", "3000000000000"),
+		},
+	)
+
+	nonCons := false
+	result, err := Parse(&extract.CSVDataResult{Files: []extract.CSVFile{file}}, ParseOpts{Consolidated: &nonCons})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// Should still produce summary values
+	assertSummaryValue(t, result.Summary, "revenue", 1000000000000)
+
+	// Should have a warning about neutral fallback
+	hasWarning := false
+	for _, w := range result.Warnings {
+		if strings.Contains(w, "neutral") || strings.Contains(w, "SummaryOfBusinessResults") {
+			hasWarning = true
+			break
+		}
+	}
+	if !hasWarning {
+		t.Errorf("expected warning about neutral fallback in non-consolidated mode, got warnings: %v", result.Warnings)
+	}
+}
+
+// --- detectAccountingStandard with SummaryOfBusinessResults rows ---
+
+func TestDetectAccountingStandard_IFRSSummaryRowsOnly(t *testing.T) {
+	rows := []parsedRow{
+		{elementID: "jpcrp_cor:RevenueIFRSSummaryOfBusinessResults", classification: ElementClassification{Statement: StmtPL, SummaryKey: "revenue"}},
+		{elementID: "jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults", classification: ElementClassification{Statement: StmtPL, SummaryKey: "net_income"}},
+	}
+	std := detectAccountingStandard(rows)
+	if std != "ifrs" {
+		t.Errorf("detectAccountingStandard = %q, want %q", std, "ifrs")
+	}
+}
+
+func TestDetectAccountingStandard_JPGAAPSummaryRowsOnly(t *testing.T) {
+	rows := []parsedRow{
+		{elementID: "jpcrp_cor:NetSalesSummaryOfBusinessResults", classification: ElementClassification{Statement: StmtPL, SummaryKey: "revenue"}},
+		{elementID: "jpcrp_cor:TotalAssetsSummaryOfBusinessResults", classification: ElementClassification{Statement: StmtBS, SummaryKey: "total_assets"}},
+	}
+	std := detectAccountingStandard(rows)
+	if std != "jpgaap" {
+		t.Errorf("detectAccountingStandard = %q, want %q", std, "jpgaap")
+	}
+}
+
+func TestDetectAccountingStandard_NeutralOnlyRows_StaysUnknown(t *testing.T) {
+	// Neutral rows like dividend/shares should NOT determine accounting standard
+	rows := []parsedRow{
+		{elementID: "jpcrp_cor:DividendPaidPerShareSummaryOfBusinessResults", classification: ElementClassification{Statement: StmtPL, SummaryKey: "dividend_per_share"}},
+		{elementID: "jpcrp_cor:NumberOfIssuedSharesAsOfFilingDateTotal", classification: ElementClassification{Statement: StmtBS, SummaryKey: "shares_outstanding"}},
+	}
+	std := detectAccountingStandard(rows)
+	if std != "unknown" {
+		t.Errorf("detectAccountingStandard = %q, want %q", std, "unknown")
 	}
 }

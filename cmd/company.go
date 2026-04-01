@@ -25,6 +25,7 @@ var (
 	companyFinancialsPeriods          int
 	companyFinancialsStatement        string
 	companyFinancialsNonConsolidated  bool
+	companyFinancialsSummaryOnly      bool
 )
 
 const (
@@ -172,6 +173,11 @@ var companyFinancialsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if companyFinancialsSummaryOnly {
+			for i := range result.Periods {
+				result.Periods[i].StripStatements()
+			}
+		}
 		return outputResult(cmd.OutOrStdout(), result)
 	},
 }
@@ -286,6 +292,7 @@ func init() {
 	companyFinancialsCmd.Flags().IntVar(&companyFinancialsPeriods, "periods", 3, "Number of fiscal periods (1-10)")
 	companyFinancialsCmd.Flags().StringVar(&companyFinancialsStatement, "statement", "all", "Statement type: bs, pl, cf, all")
 	companyFinancialsCmd.Flags().BoolVar(&companyFinancialsNonConsolidated, "non-consolidated", false, "Prefer non-consolidated statements")
+	companyFinancialsCmd.Flags().BoolVar(&companyFinancialsSummaryOnly, "summary-only", false, "Output only summary metrics without detailed statements")
 
 	companyCmd.AddCommand(companySearchCmd)
 	companyCmd.AddCommand(companyFilingsCmd)

@@ -134,6 +134,7 @@ func ListCommands() []CommandInfo {
 			Flags: []FlagInfo{
 				{Name: "--statement", Type: "string", Default: "all", Description: "Statement type: bs, pl, cf, all"},
 				{Name: "--non-consolidated", Type: "bool", Description: "Prefer non-consolidated statements"},
+				{Name: "--summary-only", Type: "bool", Description: "Output only summary metrics without detailed statements"},
 			},
 			Examples: []string{
 				"edinet doc financial S100ABCD",
@@ -170,6 +171,7 @@ func ListCommands() []CommandInfo {
 				{Name: "--periods", Type: "int", Default: "3", Description: "Number of fiscal periods (1-10)"},
 				{Name: "--statement", Type: "string", Default: "all", Description: "Statement type: bs, pl, cf, all"},
 				{Name: "--non-consolidated", Type: "bool", Description: "Prefer non-consolidated statements"},
+				{Name: "--summary-only", Type: "bool", Description: "Output only summary metrics without detailed statements"},
 			},
 			Examples: []string{
 				"edinet company financials E02144",
@@ -185,6 +187,10 @@ func ListCommands() []CommandInfo {
 		{
 			Name:        "schema commands",
 			Description: "List all CLI commands with flags",
+		},
+		{
+			Name:        "schema derived-metrics",
+			Description: "List all derived financial metrics with formulas",
 		},
 		{
 			Name:        "schema doc-types",

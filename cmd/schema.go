@@ -43,10 +43,19 @@ var schemaFinancialElementsCmd = &cobra.Command{
 	},
 }
 
+var schemaDerivedMetricsCmd = &cobra.Command{
+	Use:   "derived-metrics",
+	Short: "List all derived financial metrics with formulas",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return outputResult(cmd.OutOrStdout(), financial.DerivedMetricDefs())
+	},
+}
+
 func init() {
 	schemaCmd.AddCommand(schemaCommandsCmd)
 	schemaCmd.AddCommand(schemaDocTypesCmd)
 	schemaCmd.AddCommand(schemaSectionsCmd)
 	schemaCmd.AddCommand(schemaFinancialElementsCmd)
+	schemaCmd.AddCommand(schemaDerivedMetricsCmd)
 	rootCmd.AddCommand(schemaCmd)
 }

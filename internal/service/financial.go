@@ -214,39 +214,6 @@ func (s *FinancialService) GetCompanyFinancials(ctx context.Context, companySvc 
 	return result, nil
 }
 
-// rebuildSummary builds a summary from the given statements' current period items.
-func rebuildSummary(stmts []financial.FinancialStatement) financial.Summary {
-	summary := make(financial.Summary)
-	additiveKeys := map[string]bool{"interest_bearing_debt": true}
-
-	for _, stmt := range stmts {
-		for _, pd := range stmt.Periods {
-			if pd.Period != "current" && pd.Period != "filing_date" {
-				continue
-			}
-			for _, item := range pd.Items {
-				if item.SummaryKey == "" || item.Value == nil {
-					continue
-				}
-				if additiveKeys[item.SummaryKey] {
-					existing := summary[item.SummaryKey]
-					if existing == nil {
-						v := *item.Value
-						summary[item.SummaryKey] = &v
-					} else {
-						v := *existing + *item.Value
-						summary[item.SummaryKey] = &v
-					}
-				} else if _, exists := summary[item.SummaryKey]; !exists {
-					v := *item.Value
-					summary[item.SummaryKey] = &v
-				}
-			}
-		}
-	}
-	return summary
-}
-
 // parseAndBuild parses CSV data and builds the FinancialData output.
 func (s *FinancialService) parseAndBuild(csvResult *extract.CSVDataResult, docID string, opts StatementOpts) (*financial.FinancialData, error) {
 	parseOpts := financial.ParseOpts{
@@ -303,7 +270,7 @@ func (s *FinancialService) parseAndBuild(csvResult *extract.CSVDataResult, docID
 		data.Consolidated = hasCons
 
 		// Rebuild summary from only the filtered statements
-		data.Summary = rebuildSummary(data.Statements)
+		data.Summary = financial.BuildAndDeriveSummary(data.Statements)
 	}
 
 	// Empty result check
