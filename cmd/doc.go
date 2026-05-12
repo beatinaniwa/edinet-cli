@@ -251,13 +251,25 @@ var docTextCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to extract sections: %w", err)
 			}
-			for _, s := range sections {
+			// Pick the candidate with the most text. EDINET filings sometimes
+			// produce more than one section with the same ID (e.g., a parent
+			// heading and a child heading that both match KnownSections).
+			// Returning the first match in document order can yield an empty
+			// or near-empty parent slice; the longest-match policy avoids this.
+			var best *extract.Section
+			for i := range sections {
+				s := &sections[i]
 				if s.ID == docTextSection || strings.Contains(s.Name, docTextSection) {
-					return outputResult(cmd.OutOrStdout(), map[string]string{
-						"section": s.ID,
-						"text":    s.Text,
-					})
+					if best == nil || len(s.Text) > len(best.Text) {
+						best = s
+					}
 				}
+			}
+			if best != nil {
+				return outputResult(cmd.OutOrStdout(), map[string]string{
+					"section": best.ID,
+					"text":    best.Text,
+				})
 			}
 			// Section not found — return full text with warning
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), `{"warning":"section '%s' not found, returning full text"}`+"\n", docTextSection)

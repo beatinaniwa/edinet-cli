@@ -148,3 +148,130 @@ func TestMatchSection_Unknown(t *testing.T) {
 		t.Errorf("MatchSection should return nil for unknown heading, got %v", sec)
 	}
 }
+
+// TestExtractSections_BleedAcrossUnknownHeadings reproduces the bleed-truncated
+// pattern observed in EDINET filings such as docID S100XS22 (日本マクドナルド
+// HD 第55期): the "従業員の状況" section is followed by unknown headings
+// (関係会社の状況, 第２【事業の状況】, 経営方針, サステナビリティ) before the
+// next recognised heading (事業等のリスク). The depth-aware walker should flush
+// the employees section at the next heading whose h-level is the same as the
+// opening heading of employees, keeping employees content from bleeding into
+// the following chapters.
+func TestExtractSections_BleedAcrossUnknownHeadings(t *testing.T) {
+	data := createTestZip(t, map[string]string{
+		"PublicDoc/main.htm": `<html><body>
+			<h3>５【従業員の状況】</h3>
+			<p>従業員数は2,454名です。</p>
+			<h3>４【関係会社の状況】</h3>
+			<p>関係会社の説明です。</p>
+			<h2>第２【事業の状況】</h2>
+			<h3>１【経営方針、経営環境及び対処すべき課題等】</h3>
+			<p>経営方針の説明です。</p>
+			<h3>２【サステナビリティに関する考え方及び取組】</h3>
+			<p>サステナビリティの説明です。</p>
+			<h3>３【事業等のリスク】</h3>
+			<p>リスクの説明です。</p>
+		</body></html>`,
+	})
+
+	sections, err := ExtractSections(data)
+	if err != nil {
+		t.Fatalf("ExtractSections() error = %v", err)
+	}
+
+	var employees, risk *Section
+	for i := range sections {
+		s := &sections[i]
+		if s.ID == "employees" {
+			employees = s
+		}
+		if s.ID == "risk" {
+			risk = s
+		}
+	}
+
+	if employees == nil {
+		t.Fatal("missing 'employees' section")
+	}
+	if !strings.Contains(employees.Text, "従業員数は2,454名") {
+		t.Errorf("employees.Text = %q, missing expected content", employees.Text)
+	}
+	for _, leak := range []string{"関係会社の説明", "経営方針の説明", "サステナビリティの説明", "リスクの説明"} {
+		if strings.Contains(employees.Text, leak) {
+			t.Errorf("employees.Text bled into other chapter (found %q)", leak)
+		}
+	}
+	if risk == nil {
+		t.Fatal("missing 'risk' section")
+	}
+	if !strings.Contains(risk.Text, "リスクの説明") {
+		t.Errorf("risk.Text = %q, missing expected content", risk.Text)
+	}
+}
+
+// TestExtractSections_SameIDNestedHeading reproduces the empty-section pattern
+// observed for governance: a parent heading "コーポレート・ガバナンスの状況等"
+// (h3) is immediately followed by a child heading "コーポレート・ガバナンスの
+// 概要" (h4) — both match the governance KnownSections entry. The previous
+// implementation flushed and reset the section on the second match, leaving
+// the parent section empty. With the same-ID continuation rule, the deeper
+// heading is treated as a sub-heading inside the open governance section.
+func TestExtractSections_SameIDNestedHeading(t *testing.T) {
+	data := createTestZip(t, map[string]string{
+		"PublicDoc/main.htm": `<html><body>
+			<h3>４【コーポレート・ガバナンスの状況等】</h3>
+			<h4>（１）【コーポレート・ガバナンスの概要】</h4>
+			<p>ガバナンスの概要本文です。</p>
+			<h4>（２）【役員の状況】</h4>
+			<p>役員の状況本文です。</p>
+			<h4>（３）【監査の状況】</h4>
+			<p>監査の状況本文です。</p>
+			<h3>５【提出会社の株式事務の概要】</h3>
+			<p>株式事務の概要本文です。</p>
+		</body></html>`,
+	})
+
+	sections, err := ExtractSections(data)
+	if err != nil {
+		t.Fatalf("ExtractSections() error = %v", err)
+	}
+
+	var governance *Section
+	for i := range sections {
+		s := &sections[i]
+		if s.ID == "governance" {
+			governance = s
+		}
+	}
+
+	if governance == nil {
+		t.Fatal("missing 'governance' section")
+	}
+	for _, want := range []string{"ガバナンスの概要本文", "役員の状況本文", "監査の状況本文"} {
+		if !strings.Contains(governance.Text, want) {
+			t.Errorf("governance.Text missing expected content %q (text=%q)", want, governance.Text)
+		}
+	}
+	if strings.Contains(governance.Text, "株式事務の概要本文") {
+		t.Errorf("governance.Text bled into next chapter (株式事務の概要)")
+	}
+}
+
+// TestMergeAdjacentSameIDSections checks the merge safety net directly.
+func TestMergeAdjacentSameIDSections(t *testing.T) {
+	in := []Section{
+		{ID: "governance", Name: "コーポレート・ガバナンスの状況等", Text: ""},
+		{ID: "governance", Name: "コーポレート・ガバナンスの概要", Text: "ガバナンス本文"},
+		{ID: "financial", Name: "連結財務諸表", Text: "財務諸表本文"},
+	}
+	out := mergeAdjacentSameIDSections(in)
+	if len(out) != 2 {
+		t.Fatalf("len = %d, want 2 (governance merged + financial)", len(out))
+	}
+	if out[0].ID != "governance" {
+		t.Errorf("out[0].ID = %q, want governance", out[0].ID)
+	}
+	if !strings.Contains(out[0].Text, "ガバナンス本文") {
+		t.Errorf("merged governance.Text = %q, missing content", out[0].Text)
+	}
+}
