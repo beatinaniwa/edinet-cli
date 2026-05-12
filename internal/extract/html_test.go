@@ -149,6 +149,36 @@ func TestMatchSection_Unknown(t *testing.T) {
 	}
 }
 
+// TestMatchSection_NakaguroVariants confirms tolerant matching across the
+// 中黒 (・) variations seen in real EDINET filings. e.g., 株式会社セブン＆
+// アイ・ホールディングス 第20期 (S100VT7P) uses「コーポレートガバナンス」
+// (no middle dot) while 日本マクドナルドホールディングス 第55期 (S100XS22)
+// uses「コーポレート・ガバナンス」 (with middle dot). Both must map to the
+// governance section.
+func TestMatchSection_NakaguroVariants(t *testing.T) {
+	cases := []struct {
+		heading string
+		wantID  string
+	}{
+		{"４【コーポレート・ガバナンスの状況等】", "governance"},
+		{"４【コーポレートガバナンスの状況等】", "governance"},
+		{"（１）【コーポレート・ガバナンスの概要】", "governance"},
+		{"（１）【コーポレートガバナンスの概要】", "governance"},
+		{"４【コーポレート ガバナンスの状況等】", "governance"}, // half-width space
+		{"４【コーポレート　ガバナンスの状況等】", "governance"}, // full-width space
+	}
+	for _, c := range cases {
+		got := MatchSection(c.heading)
+		if got == nil {
+			t.Errorf("MatchSection(%q) = nil, want id=%q", c.heading, c.wantID)
+			continue
+		}
+		if got.ID != c.wantID {
+			t.Errorf("MatchSection(%q).ID = %q, want %q", c.heading, got.ID, c.wantID)
+		}
+	}
+}
+
 // TestExtractSections_BleedAcrossUnknownHeadings reproduces the bleed-truncated
 // pattern observed in EDINET filings such as docID S100XS22 (日本マクドナルド
 // HD 第55期): the "従業員の状況" section is followed by unknown headings
