@@ -3,10 +3,50 @@ package extract
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"golang.org/x/net/html"
 )
+
+// chapterHeadingPrefixRe matches headings whose leading numbering identifies
+// them as a top-level / chapter-level EDINET 有報 marker, e.g.:
+//
+//	"４【コーポレート・ガバナンスの状況等】"
+//	"第２【事業の状況】"
+//	"２【沿革】"
+//	"５ 【従業員の状況】"
+//
+// It explicitly does NOT match parenthesised sub-numbering like "(1)"  or
+// circled numbers like "①", which are used for sub-sections inside a chapter
+// (e.g., セコム 第64期 (S100W3TS) の "(1)事業環境に起因するリスク" lives inside
+// "事業等のリスク" but is marked up with the same <h3 class="smt_head2"> tag
+// as the chapter heading itself).
+var chapterHeadingPrefixRe = regexp.MustCompile(`^\s*第?\s*[０-９0-9一二三四五六七八九十百〇]+\s*【`)
+
+// filingFooterRe matches the EDINET filing-title footer artifact that appears
+// at the very end of each `_honbun_*.htm` file, e.g.:
+//
+//	"有価証券報告書（通常方式）_20260326141712"
+//
+// This token is metadata, not section content. Stripping it prevents the
+// footer from being appended to whichever section happens to be open at the
+// end of the document (typically the last `KnownSections` match such as
+// governance or financial).
+var filingFooterRe = regexp.MustCompile(`\s*(?:\x{FEFF})?\s*有価証券報告書（通常方式）_\d{14}\s*$`)
+
+// isChapterHeading reports whether the given heading text looks like a
+// chapter-level EDINET 有報 heading (chapter numbering followed by 【...】).
+func isChapterHeading(headingText string) bool {
+	return chapterHeadingPrefixRe.MatchString(headingText)
+}
+
+// stripFilingFooter removes the trailing EDINET filing-title footer artifact
+// from a section's accumulated text. Safe to call on any string; if the
+// footer is absent the input is returned unchanged.
+func stripFilingFooter(s string) string {
+	return strings.TrimSpace(filingFooterRe.ReplaceAllString(s, ""))
+}
 
 // ExtractText extracts plain text from HTML files in a type=1 XBRL ZIP archive.
 // Reads all .htm files under PublicDoc/, sorted by name, and concatenates their text.
@@ -117,8 +157,15 @@ func extractSectionsFromNodes(nodes []*html.Node) []Section {
 
 	// Flush last section
 	if state.current != nil {
-		state.current.Text = normalizeWhitespace(currentText.String())
+		state.current.Text = stripFilingFooter(normalizeWhitespace(currentText.String()))
 		sections = append(sections, *state.current)
+	}
+
+	// Strip filing-title footer from every section's tail. It is harmless when
+	// absent and avoids contaminating downstream consumers with EDINET metadata
+	// text that legitimately appears at the bottom of each HTML file.
+	for i := range sections {
+		sections[i].Text = stripFilingFooter(sections[i].Text)
 	}
 
 	return mergeAdjacentSameIDSections(sections)
@@ -183,12 +230,20 @@ func walkForSections(n *html.Node, sections *[]Section, state *sectionWalkState,
 			return
 		}
 
-		// Non-matching heading: if it is at the same depth as (or shallower
-		// than) the heading that opened the current section, treat it as a
-		// section boundary and flush. Deeper headings are sub-headings of the
-		// current section (e.g., "（２）役員の状況" inside a governance section
-		// anchored at h3) and should keep accumulating text.
-		if state.current != nil && level > 0 && level <= state.depth {
+		// Non-matching heading: flush only if it looks like a chapter-level
+		// EDINET 有報 heading (e.g., "４【関係会社の状況】", "第４【提出会社の
+		// 状況】") at the same depth as (or shallower than) the heading that
+		// opened the current section.
+		//
+		// Why filter by chapter-numbering pattern: some filers (e.g., セコム
+		// 第64期 S100W3TS) mark up *sub-section* headings such as
+		// "(1)事業環境に起因するリスク" with the same <h3> tag as the chapter
+		// heading "３【事業等のリスク】". Pure depth-based flushing would close
+		// the risk section at the first sub-heading and drop most of its
+		// content. Restricting the flush to chapter-numbered headings keeps
+		// sub-sections inside the open section while still closing it when a
+		// new chapter (matching or not) begins.
+		if state.current != nil && level > 0 && level <= state.depth && isChapterHeading(headingText) {
 			state.current.Text = normalizeWhitespace(text.String())
 			*sections = append(*sections, *state.current)
 			state.current = nil

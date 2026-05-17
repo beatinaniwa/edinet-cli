@@ -287,6 +287,139 @@ func TestExtractSections_SameIDNestedHeading(t *testing.T) {
 	}
 }
 
+// TestExtractSections_SubHeadingSameHTag reproduces the セコム 第64期
+// (S100W3TS) pattern: the chapter heading "３【事業等のリスク】" and the
+// sub-section heading "(1)事業環境に起因するリスク" are both marked up with
+// <h3 class="smt_head2"> in the source HTML. Pure depth-based flushing would
+// close risk at the first sub-heading and drop its content; the chapter-vs-
+// sub-numbering check must keep them together.
+func TestExtractSections_SubHeadingSameHTag(t *testing.T) {
+	data := createTestZip(t, map[string]string{
+		"PublicDoc/main.htm": `<html><body>
+			<h3>３【事業等のリスク】</h3>
+			<p>リスクのイントロ段落です。</p>
+			<h3>(1)事業環境に起因するリスク</h3>
+			<p>事業環境リスクの本文です。</p>
+			<h3>①社会・経済</h3>
+			<p>社会・経済の説明です。</p>
+			<h3>(2)経営戦略に関するリスク</h3>
+			<p>経営戦略リスクの本文です。</p>
+			<h3>４【経営者による財政状態、経営成績及びキャッシュ・フローの状況の分析】</h3>
+			<p>MD&A の本文です。</p>
+		</body></html>`,
+	})
+
+	sections, err := ExtractSections(data)
+	if err != nil {
+		t.Fatalf("ExtractSections() error = %v", err)
+	}
+
+	var risk, mda *Section
+	for i := range sections {
+		s := &sections[i]
+		if s.ID == "risk" {
+			risk = s
+		}
+		if s.ID == "mda" {
+			mda = s
+		}
+	}
+
+	if risk == nil {
+		t.Fatal("missing 'risk' section")
+	}
+	for _, want := range []string{"リスクのイントロ段落", "事業環境リスクの本文", "社会・経済の説明", "経営戦略リスクの本文"} {
+		if !strings.Contains(risk.Text, want) {
+			t.Errorf("risk.Text missing %q (text=%q)", want, risk.Text)
+		}
+	}
+	if strings.Contains(risk.Text, "MD&A の本文") {
+		t.Errorf("risk.Text bled into MD&A chapter (text=%q)", risk.Text)
+	}
+	if mda == nil {
+		t.Fatal("missing 'mda' section")
+	}
+	if !strings.Contains(mda.Text, "MD&A の本文") {
+		t.Errorf("mda.Text missing expected content (text=%q)", mda.Text)
+	}
+}
+
+// TestIsChapterHeading covers the chapter-vs-sub-numbering predicate.
+func TestIsChapterHeading(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"４【コーポレート・ガバナンスの状況等】", true},
+		{"第２【事業の状況】", true},
+		{"２【沿革】", true},
+		{"５ 【従業員の状況】", true},
+		{"第４ 【提出会社の状況】", true},
+		{"(1)事業環境に起因するリスク", false},
+		{"（１）【コーポレート・ガバナンスの概要】", false},
+		{"①社会・経済", false},
+		{"a. 受注実績", false},
+		{"②キャッシュ・フローの状況", false},
+	}
+	for _, c := range cases {
+		got := isChapterHeading(c.in)
+		if got != c.want {
+			t.Errorf("isChapterHeading(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+// TestStripFilingFooter checks the EDINET filing-title footer is removed.
+func TestStripFilingFooter(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"ガバナンスの本文です。 有価証券報告書（通常方式）_20260326141712", "ガバナンスの本文です。"},
+		{"テキスト 有価証券報告書（通常方式）_20250523094900\n", "テキスト"},
+		{"footerなし", "footerなし"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		got := stripFilingFooter(c.in)
+		if got != c.want {
+			t.Errorf("stripFilingFooter(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestExtractSections_FilingFooterStripped confirms the filing-title footer
+// artifact at the end of an HTML file is not retained in the last section's
+// body text.
+func TestExtractSections_FilingFooterStripped(t *testing.T) {
+	data := createTestZip(t, map[string]string{
+		"PublicDoc/main.htm": `<html><body>
+			<h3>４【コーポレート・ガバナンスの状況等】</h3>
+			<p>ガバナンスの本文です。</p>
+			<p>有価証券報告書（通常方式）_20260326141712</p>
+		</body></html>`,
+	})
+
+	sections, err := ExtractSections(data)
+	if err != nil {
+		t.Fatalf("ExtractSections() error = %v", err)
+	}
+	var governance *Section
+	for i := range sections {
+		if sections[i].ID == "governance" {
+			governance = &sections[i]
+		}
+	}
+	if governance == nil {
+		t.Fatal("missing 'governance' section")
+	}
+	if strings.Contains(governance.Text, "有価証券報告書（通常方式）_") {
+		t.Errorf("governance.Text still contains filing footer artifact (text=%q)", governance.Text)
+	}
+	if !strings.Contains(governance.Text, "ガバナンスの本文") {
+		t.Errorf("governance.Text missing expected content (text=%q)", governance.Text)
+	}
+}
+
 // TestMergeAdjacentSameIDSections checks the merge safety net directly.
 func TestMergeAdjacentSameIDSections(t *testing.T) {
 	in := []Section{
